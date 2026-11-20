@@ -159,7 +159,7 @@ export function guestOrdering(app, params) {
         ${native ? button('signout', 'Sign out') : ''}</section>`
       : order ? ticket() : table ? menuCard() : landing();
     app.innerHTML = `<main class="guest order-app">
-      <header class="order-header"><a href="${url({ shell:'guest', ...(native ? { native:'1' } : {}) })}" aria-label="Served home"><img src="/served-logo.png" alt="Served" width="110" height="45"></a></header>
+      <header class="order-header"><a href="${url({ shell:'guest', ...(native ? { native:'1' } : {}) })}" aria-label="Served home"><img src="/served-logo.png" alt="Served" width="88" height="36"></a></header>
       <div class="order-content">${issue ? `<p class="order-error" role="status">${esc(issue)}</p>` : ''}${content}</div>
       <nav class="order-tabs" aria-label="Guest navigation">${tabs.map(([key, glyph, title]) =>
         `<button type="button" data-order-action="tab" data-value="${key}" ${screen === key ? 'aria-current="page"' : ''}>${icon(glyph, 19)}<span>${title}</span></button>`).join('')}</nav>

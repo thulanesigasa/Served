@@ -3,7 +3,7 @@
     "name": "Served",
     "slug": "served",
     "scheme": "served",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "runtimeVersion": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -18,8 +18,8 @@
     "android": {
       "package": "za.co.tsindustries.served",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#251929"
       },
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
@@ -28,7 +28,7 @@
       "permissions": [
         "android.permission.VIBRATE"
       ],
-      "versionCode": 2
+      "versionCode": 3
     },
     "plugins": [
       [
@@ -50,9 +50,9 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash.png",
-          "imageWidth": 232,
+          "imageWidth": 172,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#251929"
         }
       ]
     ],

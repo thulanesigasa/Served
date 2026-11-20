@@ -453,7 +453,7 @@ dialog::backdrop { background: #1a101dc4; }
   .guest { --pad: 17px; padding-inline: 15px; }
 }
 
-.brand-logo, .order-header img { display: block; background: #fff; object-fit: contain; }
+.brand-logo, .order-header img { display: block; object-fit: contain; }
 .order-app { max-width: 610px; padding-bottom: 109px; }
 .order-header { padding: 5px 6px 15px; }
 .order-header a { display: inline-block; }

@@ -113,7 +113,7 @@ export function Entry({ ready, onWelcome, onSession }) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   screen: { padding: 18, paddingTop: 25, gap: 22, width: '100%', maxWidth: 520, alignSelf: 'center' },
-  brand: { width: 106, height: 53, backgroundColor: '#fff' },
+  brand: { width: 84, height: 43 },
   paper: { backgroundColor: '#f7cdd0', padding: 21, borderRadius: 9, gap: 11 },
   title: { color: '#321e32', fontSize: 38, lineHeight: 42, letterSpacing: -1.2, fontWeight: '900' },
   body: { color: '#57364f', fontSize: 15, lineHeight: 22 },
