@@ -22,7 +22,7 @@ export default {
       { headers: {
         'content-type': mime, 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff',
         'referrer-policy': 'no-referrer',
-        'content-security-policy': "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+        'content-security-policy': "default-src 'self'; img-src 'self' data:; frame-ancestors 'self' https://chatgpt.com https://*.chatgpt.com; base-uri 'none'; form-action 'self'",
       } });
   },
 };
