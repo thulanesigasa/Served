@@ -43,6 +43,10 @@ test('guest tickets are idempotent and receive staff-only state changes', async 
     assert.equal((await send(queue, 'PATCH', { id: first.id, status: 'done' }, staffToken)).body.status, 'done');
     assert.equal((await send(queue, 'PATCH', { id: second.id, status: 'cancelled' }, staffToken)).body.status, 'cancelled');
     assert.equal((await send('tickets/' + second.id)).body.status, 'cancelled');
+    await db.prepare('UPDATE tickets SET called_at = ? WHERE id = ?').bind(Date.now() - 15 * 60_000, first.id).run();
+    const nextTable = (await send(path + '/join', 'POST', { ...first, id: '4'.repeat(32) })).body;
+    assert.equal(nextTable.position, 1);
+    assert.equal(nextTable.estimated_wait_minutes, 6);
   } finally {
     db.close();
   }

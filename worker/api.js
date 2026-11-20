@@ -120,8 +120,8 @@ async function guestTicket(statement, ticket) {
     .filter(minutes => minutes >= 1 && minutes <= 30).sort((a, b) => a - b);
   const pace = intervals.length >= 3 ? intervals[Math.floor(intervals.length / 2)]
     : ticket.kind === 'table' ? 6 : 4;
-  const elapsedSinceLastCall = calls.length ? (now - calls[0].called_at) / 60_000
-    : (now - ticket.created_at) / 60_000;
-  const eta = Math.max(1, Math.ceil(pace * (ahead + 1) - Math.min(pace - 1, elapsedSinceLastCall)));
+  const paceStart = Math.max(ticket.created_at, calls[0]?.called_at ?? 0);
+  const elapsed = (now - paceStart) / 60_000;
+  const eta = Math.max(1, Math.ceil(pace * (ahead + 1) - Math.min(pace - 1, elapsed)));
   return { ...ticket, position: ahead + 1, estimated_wait_minutes: eta };
 }
