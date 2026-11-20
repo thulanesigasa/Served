@@ -669,3 +669,26 @@ dialog::backdrop { background: #1a101dc4; }
 .demo-app .table-hold .btn.primary { background: #f4bfc4; color: #291a28; }
 .demo-receipt .demo-ticket-number { color: #f4bfc4; border-block: 1px dashed #b9889d; padding: 12px 0; }
 .demo-receipt .food-list li, .demo-cart .food-list li { border-color: #937086; }
+
+.demo-cart-launch {
+  position: fixed;
+  z-index: 4;
+  inset: auto max(23px, calc((100vw - 690px) / 2)) calc(86px + env(safe-area-inset-bottom)) auto;
+}
+.demo-cart-launch .btn { box-shadow: 0 4px 18px #18101990; }
+.demo-dish-copy { min-height: 103px; }
+.staff-catalog h2 small { margin-left: 8px; font: inherit; font-size: .95rem; }
+.staff-catalog h3 { margin: 19px 0 3px; }
+.staff-catalog ul { margin: 0; padding: 0; list-style: none; }
+.staff-catalog li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #95718d65;
+}
+.staff-catalog li > div { flex: 1; }
+.staff-catalog li p { margin: 4px 0 0; }
+.staff-catalog li > strong { white-space: nowrap; }
+.staff-menu-editor { margin-top: 20px; }
+.staff-menu-editor summary { cursor: pointer; }

@@ -39,6 +39,13 @@ test('table checkout verifies the payment before exposing an order to staff', as
   const [, item] = await send(staff + '/menu', 'POST', { name:'Chips', description:'With salt', price:4000, available:true }, staffToken);
   const menu = 'menus/' + table.id;
   assert.equal((await send(menu))[1].payment_available, false);
+  const [catalogStatus, catalog] = await send('menus/' + venue.id);
+  assert.equal(catalogStatus, 200);
+  assert.equal(catalog.general, true);
+  assert.equal(catalog.venue_name, 'Test cafe');
+  assert.deepEqual(catalog.tables, [table]);
+  assert.deepEqual(catalog.items, (await send(menu))[1].items);
+  assert.equal((await send('menus/' + venue.id + '/checkout', 'POST', {}))[0], 404);
   const [, account] = await send('guests/signup', 'POST', { name:'Test Guest', email:'guest@example.com', password:'Testing42!' });
   assert.equal((await send(menu + '/visit', 'POST', {}, account.token))[0], 200);
   assert.equal((await send('orders/shops', 'GET', undefined, account.token))[1][0].id, venue.id);
@@ -105,6 +112,7 @@ test('a shared table QR has only one active reservation across guests', async t 
   assert.equal((await send(reservation, { ...losingGuest, check:true })).body.busy, true);
   assert.equal((await send(reservation, { ...guests[winner], check:true })).body.busy, false);
   assert.deepEqual((await send(menu)).body.alternatives, ['Table 3']);
+  assert.deepEqual((await send('menus/' + venue.id)).body.tables, [other]);
   assert.equal((await send('menus/' + other.id + '/reservation', losingGuest)).status, 201);
   assert.equal((await send(staff, null, staffToken)).body.tables.every(row => row.occupied), true);
   await send(reservation, { ...losingGuest, release:true });

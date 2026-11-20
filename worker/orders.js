@@ -164,6 +164,10 @@ async function webhook(request, env, db) {
   return out({ ok: true });
 }
 
+function menuItems(db, venueId) {
+  return db('SELECT id, name, description, price FROM menu_items WHERE venue_id = ? AND available = 1 ORDER BY name', venueId).all();
+}
+
 export async function ordering(request, env, db, section, id, action, data) {
   const method = request.method;
   if (section === 'paystack' && id === 'webhook' && !action && method === 'POST') return webhook(request, env, db);
@@ -183,9 +187,22 @@ export async function ordering(request, env, db, section, id, action, data) {
   if (!validId(id)) return error('This link is unavailable.', 404);
   if (section === 'menus') {
     const table = await db(`SELECT t.*, v.name AS venue_name FROM dining_tables t JOIN venues v ON v.id = t.venue_id WHERE t.id = ?`, id).first();
+    if (!table && !action && method === 'GET') {
+      const venue = await db('SELECT id, name FROM venues WHERE id = ?', id).first();
+      if (!venue) return error('Menu unavailable. Ask the restaurant for its QR code.', 404);
+      const [items, tables] = await Promise.all([
+        menuItems(db, id),
+        db(`SELECT t.id, t.label FROM dining_tables t
+          WHERE t.venue_id = ? AND NOT ${activeOrder('t.id')}
+          AND NOT EXISTS (SELECT 1 FROM table_reservations r WHERE r.table_id = t.id AND r.expires_at > ?)
+          ORDER BY t.label`, id, Date.now()).all(),
+      ]);
+      return out({ id, venue_id:id, venue_name:venue.name, general:true, items:items.results,
+        tables:tables.results, payment_available:Boolean(merchant(env, id)) });
+    }
     if (!table) return error('Table unavailable. Ask staff for a table QR code.', 404);
     if (!action && method === 'GET') {
-      const { results } = await db('SELECT id, name, description, price FROM menu_items WHERE venue_id = ? AND available = 1 ORDER BY name', table.venue_id).all();
+      const { results } = await menuItems(db, table.venue_id);
       const now = Date.now();
       const { results: alternatives } = await db(`SELECT t.label FROM dining_tables t
         WHERE t.venue_id = ? AND t.id <> ? AND NOT ${activeOrder('t.id')}

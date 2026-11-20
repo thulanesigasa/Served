@@ -44,9 +44,11 @@ export function OrderShell({ session, onSignOut, onLegacy }) {
     const params = new URL(value).searchParams;
     const table = params.get('table');
     const order = params.get('order');
+    const venue = params.get('venue');
     if (validId(table)) send('served-table', table);
     else if (validId(order)) send('served-order', order);
-    else if (params.has('venue') || params.has('ticket')) onLegacy(value);
+    else if (params.has('ticket') || (venue && params.get('waitlist') === '1')) onLegacy(value);
+    else if (validId(venue) || venue === 'demo' || params.has('demo-menu')) send('served-table', venue || 'demo');
     else Alert.alert('Table QR unavailable', 'Ask the restaurant for the QR code for your table.');
   }
 
@@ -133,7 +135,7 @@ export function OrderShell({ session, onSignOut, onLegacy }) {
       style={styles.web}
     />}
     {scanner && <View style={styles.scanner}>
-      <View style={styles.scannerHeader}><Text accessibilityRole="header" style={styles.text}>Scan your table QR</Text>
+      <View style={styles.scannerHeader}><Text accessibilityRole="header" style={styles.text}>Scan a restaurant QR</Text>
         <Pressable accessibilityRole="button" onPress={() => setScanner(false)}><Text style={styles.text}>Close</Text></Pressable></View>
       <CameraView style={styles.web} barcodeScannerSettings={{ barcodeTypes:['qr'] }} onBarcodeScanned={({ data }) => {
         if (scanning.current) return;

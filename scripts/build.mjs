@@ -10,6 +10,7 @@ const mime = {
   '/manifest.webmanifest': 'application/manifest+json; charset=utf-8',
   '/demo/burger.webp': 'image/webp', '/demo/chicken.webp': 'image/webp',
   '/demo/pizza.webp': 'image/webp', '/demo/lemonade.webp': 'image/webp',
+  '/served-favicon.png': 'image/png', '/favicon.ico': 'image/x-icon',
   '/served-logo.png': 'image/png',
   '/icon-192.png': 'image/png', '/icon-512.png': 'image/png',
 };
