@@ -101,7 +101,7 @@ function age(value) {
   return Math.floor(minutes / 60) + ' hr';
 }
 function ticketRow(row, history) {
-  return `<div class="ticket-row" data-id="${escape(row.id)}">
+  return `<div class="ticket-row" data-id="${escape(row.id)}" data-status="${row.status}">
     <div class="ticket-who"><span class="number">${ticketNo(row)}</span><strong>${escape(row.name)}</strong></div>
     <span class="ticket-kind">${icon(row.kind === 'table' ? 'table' : 'bag', 16)} ${typeName(row)}${row.kind === 'table' ? ` · ${row.size}` : ''}</span>
     <span class="dim ticket-age">${age(history ? row.closed_at || row.created_at : row.created_at)}</span>
@@ -128,7 +128,8 @@ function queuePanel(history) {
 }
 function qrPanel() {
   return `<section class="surface qr-panel">
-    <h2>${hasStaff ? escape(currentVenue.venue.name) : 'Demo guest QR'}</h2>
+    <div class="ticket-topline"><strong>${hasStaff ? escape(currentVenue.venue.name) : 'Served demo'}</strong><span class="eyebrow">Guest queue</span></div>
+    <h2>${hasStaff ? 'Scan to join the queue' : 'Set up a guest QR'}</h2>
     <p>${hasStaff ? 'Put this QR code at the entrance or pickup counter. Guests can scan it and join from their phone.' : 'Create a venue to get a QR code that connects guests on other devices to your live queue.'}</p>
     <img id="qr-image" class="qr-image" alt="Guest queue QR code" width="242" height="242" hidden>
     <div class="guest-controls">${hasStaff ? actionButton('copy', icon('link', 16) + ' Copy link') +
@@ -162,19 +163,22 @@ function renderDashboard() {
     ${actionButton('install', icon('download', 18) + ' Install Served', 'primary')}</section>`,
   };
   app.innerHTML = `<div class="shell">
-    <aside>${brand()}<nav class="nav" aria-label="Main navigation">${navItems.map(([key, symbol, text]) =>
-      `<button type="button" class="${key === screen.tab ? 'active' : ''}" data-action="nav-${key}" ${key === screen.tab ? 'aria-current="page"' : ''}>${icon(symbol, 18)}${text}</button>`).join('')}</nav>
+    <header class="top"><div class="top-inner">${brand()}
       <button type="button" class="venue" data-action="${hasStaff ? 'venue' : 'setup'}"><span class="venue-icon">${icon('building', 17)}</span><span>
         <strong>${hasStaff ? escape(currentVenue.venue.name) : 'Served demo'}</strong><small>${hasStaff ? 'Venue settings' : 'Set up a venue'}</small></span></button>
-    </aside>
-    <div class="right"><header class="top">${brand()}<span class="top-label">Staff dashboard</span><div class="top-actions">
-      ${hasStaff ? '<button type="button" class="btn live" id="connection" data-action="venue" aria-label="Venue settings">' + (screen.lastGood ? 'Live' : 'Reconnecting') + '</button>' :
-        actionButton('setup', 'Demo mode', 'demo-pill', 'Demo mode. Set up a venue')}
-      <a class="btn view-guest" href="${escape(hasStaff ? guestLink() : link({ guest: 1 }))}" target="_blank" rel="noopener" aria-label="Guest view">${icon('phone', 17)} Guest view</a>
+      <div class="top-actions">
+        ${hasStaff ? '<button type="button" class="btn live" id="connection" data-action="venue" aria-label="Venue settings">' + (screen.lastGood ? 'Live' : 'Reconnecting') + '</button>' :
+          actionButton('setup', 'Demo mode', 'demo-pill', 'Demo mode. Set up a venue')}
+        <a class="btn view-guest" href="${escape(hasStaff ? guestLink() : link({ guest: 1 }))}" target="_blank" rel="noopener" aria-label="Guest view">${icon('phone', 17)} <span>Guest view</span></a>
+      </div>
     </div></header>
-    <main class="dashboard" id="dashboard"><div class="heading"><div><h1>${title}</h1><p>${subtitle}</p></div>
+    <nav class="nav" aria-label="Main navigation"><div class="nav-inner">${navItems.map(([key, symbol, text]) =>
+      `<button type="button" class="${key === screen.tab ? 'active' : ''}" data-action="nav-${key}" ${key === screen.tab ? 'aria-current="page"' : ''}>${icon(symbol, 18)}${text}</button>`).join('')}</div></nav>
+    <main class="dashboard" id="dashboard">
+      <div class="heading"><div><p class="eyebrow">Host stand</p><h1>${title}</h1><p>${subtitle}</p></div>
       ${screen.tab === 'queue' ? actionButton('add', icon('plus', 18) + ' New ticket', 'primary') : ''}</div>
-      <div id="dashboard-content">${contents[screen.tab]()}</div></main></div>
+      <div id="dashboard-content">${contents[screen.tab]()}</div>
+    </main>
   </div>`;
   if (screen.tab === 'qr' && hasStaff) setQr();
 }
@@ -211,7 +215,7 @@ function renderGuestHome() {
   const recentTicket = read('served.lastTicket');
   app.innerHTML = `<main class="guest"><header class="guestheader">${brand()}
     ${actionButton('install', icon('download', 17), 'icon-btn', 'Install Served')}</header>
-    <section class="surface guest-card"><span class="tile-icon">${icon('bell', 25)}</span>
+    <section class="surface guest-card guest-entry"><span class="tile-icon">${icon('bell', 25)}</span>
     <h1>Find your queue</h1><p>Scan the restaurant’s QR code with your phone camera or paste its Served link here.</p>
     ${recentTicket ? `<p><a class="btn" href="${escape(link({ ticket: recentTicket }))}">Open my last ticket</a></p>` : ''}
     <form id="guest-link-form"><label>Guest link <input name="link" type="url" required autocomplete="off"
@@ -219,40 +223,61 @@ function renderGuestHome() {
     <button class="btn primary">Open queue</button></form></section>
     <p class="info"><a href="${link({ venue: 'demo' })}">Try the demo</a> · <a href="/">Staff dashboard</a></p></main>`;
 }
+const ordinalSuffix = position => {
+  const lastTwo = position % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return 'th';
+  return ({ 1: 'st', 2: 'nd', 3: 'rd' })[position % 10] || 'th';
+};
+function ticketStub(item) {
+  return `<div class="ticket-stub">
+    <div class="stub-number"><span class="eyebrow">Ticket</span><strong>${ticketNo(item)}</strong></div>
+    <div class="stub-details"><strong>${escape(item.name)}</strong><span>${item.kind === 'table' ? `Table for ${item.size}` : 'Order pickup'}</span></div>
+  </div>`;
+}
 function renderGuest(message = '') {
   const header = `<header class="guestheader">${brand()}${actionButton('install', icon('download', 17), 'icon-btn', 'Install Served')}</header>`;
   let body;
+  let cardState = '';
   if (message) {
-    body = `<h1>${guestVenue || ticket ? 'Connection interrupted' : 'Guest queue'}</h1><p role="status">${escape(message)}</p>
-      ${actionButton('retry', 'Try again', 'primary')}`;
+    body = `<div class="ticket-main"><h1>${guestVenue || ticket ? 'Connection interrupted' : 'Guest queue'}</h1>
+      <p role="status">${escape(message)}</p>${actionButton('retry', 'Try again', 'primary')}</div>`;
   } else if (ticket) {
     const isTable = ticket.kind === 'table';
+    const isWaiting = ticket.status === 'waiting';
+    const position = ticket.position;
     const details = {
-      waiting: ['You’re in the queue', ticket.position === 1 ? 'You’re next in line.' :
-        `There are ${ticket.position - 1} tickets ahead of you.`],
+      waiting: ['You’re in the queue', position === 1 ? 'You’re next. We’ll let you know when to come up.' :
+        `${position - 1} ${position === 2 ? 'ticket' : 'tickets'} ahead of you.`],
       ready: [isTable ? 'Your table is ready!' : 'Your order is ready!', isTable ? 'Show this ticket at the host stand.' : 'Show this ticket at the pickup counter.'],
       done: ['You’re all set', 'This ticket has been completed.'],
       cancelled: ['Ticket cancelled', 'Speak to staff if you still need help.'],
     };
     const [title, description] = details[ticket.status];
-    body = `<span class="tile-icon">${icon(ticket.status === 'ready' ? 'bell' : 'check', 25)}</span>
-      <strong class="dim">${escape(ticket.venue_name)}</strong>
-      <h1 id="ticket-state" aria-live="polite">${title}</h1>
-      <div class="ticket-id">${ticketNo(ticket)}</div>
-      <p>${description}</p>
-      ${ticket.status === 'waiting' ? `<div class="guest-controls">
+    cardState = `is-${ticket.status}`;
+    const status = isWaiting ? 'In the queue' : ticket.status === 'ready' ? 'Called' : label[ticket.status];
+    body = `<div class="ticket-topline"><strong>${escape(ticket.venue_name)}</strong><span class="eyebrow">${status}</span></div>
+      <div class="ticket-main">
+        ${isWaiting ? `<h1 id="ticket-state" class="position-title" aria-live="polite" aria-label="You’re ${position}${ordinalSuffix(position)} in line">
+          <span class="position-lead">You’re</span><span class="position-number">${position}<sup>${ordinalSuffix(position)}</sup></span><span class="position-tail">in line</span></h1>`
+          : `<span class="tile-icon">${icon(ticket.status === 'ready' ? 'bell' : 'check', 26)}</span>
+             <h1 id="ticket-state" aria-live="polite">${title}</h1>`}
+        <p>${description}</p>
+      </div>${ticketStub(ticket)}
+      <div class="ticket-footer">
+      ${isWaiting ? `<div class="guest-controls">
         ${actionButton('sound', icon('volume', 17) + (sound?.state === 'running' ? ' Sound enabled' : ' Enable sound'))}
         ${actionButton('awake', icon('phone', 17) + (keepAwake ? ' Keep awake on' : ' Keep screen awake'))}
-      </div><div class="info" id="guest-connection">Keep this ticket open to receive your call.</div>`
-        : `<a href="${escape(link({ venue: ticket.venue_id }))}" class="btn">Back to guest queue</a>`}`;
+      </div><p class="info" id="guest-connection">Keep this ticket open to receive your call.</p>`
+        : `<a href="${escape(link({ venue: ticket.venue_id }))}" class="btn ${ticket.status === 'ready' ? 'primary' : ''}">Back to guest queue</a>`}
+      </div>`;
   } else if (guestVenue) {
-    body = `<span class="tile-icon">${icon('bell', 25)}</span><strong class="dim">${escape(guestVenue.name)}</strong>
-      <h1>Join the queue</h1><p>Get a ticket and we’ll let you know when you’re called.</p>
-      <form id="guest-form">${formFields()}<button class="btn primary">Get my ticket</button></form>`;
+    body = `<div class="ticket-topline"><strong>${escape(guestVenue.name)}</strong><span class="eyebrow">Guest queue</span></div>
+      <div class="ticket-main"><h1>Join the queue</h1><p>Get a ticket and we’ll call you when your table or order is ready.</p>
+      <form id="guest-form">${formFields()}<button class="btn primary">Get my ticket</button></form></div>`;
   } else {
-    body = '<h1>Opening your queue</h1><p role="status">Connecting to Served…</p>';
+    body = '<div class="ticket-main"><h1>Opening your queue</h1><p role="status">Connecting to Served…</p></div>';
   }
-  app.innerHTML = `<main class="guest">${header}<section class="surface guest-card ${ticket?.status === 'ready' ? 'is-ready' : ''}">${body}</section>
+  app.innerHTML = `<main class="guest">${header}<section class="surface guest-card ${cardState}">${body}</section>
     ${demo ? '<p class="info">Demo tickets sync between tabs in this browser.</p>' : ''}</main>`;
 }
 function demoTicket(id) {

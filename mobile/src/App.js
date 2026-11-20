@@ -14,12 +14,23 @@ import { WebView } from 'react-native-webview';
 import { guestDestination, origin, request, ticketDetails } from './served';
 
 const LAST_TICKET = 'served.lastTicket';
-const colours = { dark: '#12372d', green: '#245f46', text: '#162d25', muted: '#52655b', surface: '#f5f7f5' };
+const colours = {
+  surface: '#251929', ink: '#321e32', muted: '#57364f', paper: '#f7cdd0',
+  rose: '#f4bfc4', cream: '#fff4e4', butter: '#f6d488', green: '#176342',
+};
+const headline = Platform.select({ android: 'sans-serif-condensed', ios: 'AvenirNextCondensed-Heavy' });
+const mono = Platform.select({ android: 'monospace', ios: 'Courier' });
 
-function Button({ children, disabled, onPress, primary = false }) {
+function ordinalSuffix(position) {
+  const lastTwo = position % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return 'th';
+  return ({ 1: 'st', 2: 'nd', 3: 'rd' })[position % 10] || 'th';
+}
+
+function Button({ children, disabled, onPress, primary = false, onDark = false }) {
   return <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled}
-    onPress={onPress} style={({ pressed }) => [styles.button, primary && styles.primary, (pressed || disabled) && styles.dimmed]}>
-    <Text style={[styles.buttonText, primary && styles.primaryText]}>{children}</Text>
+    onPress={onPress} style={({ pressed }) => [styles.button, onDark && styles.darkButton, primary && styles.primary, (pressed || disabled) && styles.dimmed]}>
+    <Text style={[styles.buttonText, onDark && styles.darkButtonText, primary && styles.primaryText]}>{children}</Text>
   </Pressable>;
 }
 function KeepAwake() {
@@ -51,7 +62,7 @@ function GuestForm({ venue, onJoin }) {
     }
   }
   return <>
-    <Text style={styles.kicker}>{venue.name}</Text>
+    <View style={styles.ticketHeader}><Text style={styles.kicker}>{venue.name}</Text><Text style={styles.stamp}>Guest queue</Text></View>
     <Text style={styles.title} accessibilityRole="header">Join the queue</Text>
     <Text style={styles.description}>Get a ticket for a table or order pickup.</Text>
     <Text style={styles.label}>Name or order reference</Text>
@@ -203,12 +214,13 @@ function Served() {
   }, [destination, lastTicket, player, soundOn]);
 
   const waiting = ticket?.status === 'waiting';
+  const ready = ticket?.status === 'ready';
   const [title, detail] = ticket ? ticketDetails(ticket) : [];
   return <SafeAreaView style={styles.safe}>
-    <StatusBar style="dark" />
+    <StatusBar style="light" />
     <View style={styles.top}>
       <Text accessibilityRole="header" style={styles.brand}>Served</Text>
-      {(camera || staff || destination) && <Button onPress={camera ? () => setCamera(false) : returnHome}>Back</Button>}
+      {(camera || staff || destination) && <Button onDark onPress={camera ? () => setCamera(false) : returnHome}>Back</Button>}
     </View>
     {camera ? <CameraView style={styles.camera} barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
       onBarcodeScanned={({ data }) => {
@@ -221,12 +233,33 @@ function Served() {
         setSupportMultipleWindows={false} style={styles.camera} />
       : <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
-          <View style={[styles.card, ticket?.status === 'ready' && styles.ready]}>
+          <View style={[styles.card, ready && styles.ready]}>
             {ticket ? <>
-              <Text style={styles.kicker}>{ticket.venue_name}</Text>
-              <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={styles.title}>{title}</Text>
-              <Text style={styles.ticketNo}>#{String(ticket.number).padStart(3, '0')}</Text>
-              <Text style={styles.description}>{detail}</Text>
+              <View style={[styles.ticketHeader, ready && styles.readyRule]}>
+                <Text style={[styles.kicker, ready && styles.readyText]}>{ticket.venue_name}</Text>
+                <Text style={[styles.stamp, ready && styles.readyText]}>{waiting ? 'In the queue' : ready ? 'Called' : ticket.status === 'done' ? 'Completed' : 'Cancelled'}</Text>
+              </View>
+              {waiting ? <View accessible accessibilityRole="header"
+                accessibilityLabel={`You’re ${ticket.position}${ordinalSuffix(ticket.position)} in line`}>
+                <Text style={styles.positionCaption}>You’re</Text>
+                <View style={styles.positionRow}>
+                  <Text style={styles.position}>{ticket.position}</Text>
+                  <Text style={styles.positionSuffix}>{ordinalSuffix(ticket.position)}</Text>
+                </View>
+                <Text style={styles.positionCaption}>in line</Text>
+              </View> : <Text accessibilityRole="header" accessibilityLiveRegion="polite"
+                style={[styles.title, ready && styles.readyText]}>{title}</Text>}
+              <Text style={[styles.description, waiting && styles.queueNote, ready && styles.readyText]}>{detail}</Text>
+              <View style={[styles.stub, ready && styles.readyRule]}>
+                <View style={[styles.stubNumber, ready && styles.readyRule]}>
+                  <Text style={[styles.stamp, ready && styles.readyText]}>Ticket</Text>
+                  <Text style={[styles.ticketNo, ready && styles.readyText]}>#{String(ticket.number).padStart(3, '0')}</Text>
+                </View>
+                <View style={styles.stubDetails}>
+                  <Text style={[styles.label, ready && styles.readyText]}>{ticket.name}</Text>
+                  <Text style={[styles.description, ready && styles.readyText]}>{ticket.kind === 'table' ? `Table for ${ticket.size}` : 'Order pickup'}</Text>
+                </View>
+              </View>
               {!!error && <Text style={styles.error} accessibilityLiveRegion="polite">{error}</Text>}
               {waiting && <>
                 {awake && <KeepAwake />}
@@ -259,7 +292,7 @@ function Served() {
                 {!!lastTicket && <Button onPress={() => open({ ticket: lastTicket })}>Open my last ticket</Button>}
               </>}
           </View>
-          {!destination && <Button onPress={() => { setStaff(true); setError(''); }}>Staff dashboard</Button>}
+          {!destination && <Button onDark onPress={() => { setStaff(true); setError(''); }}>Staff dashboard</Button>}
         </ScrollView>
       </KeyboardAvoidingView>}
   </SafeAreaView>;
@@ -271,23 +304,43 @@ export default function App() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colours.surface },
   flex: { flex: 1 },
-  top: { paddingHorizontal: 20, paddingVertical: 10, minHeight: 63, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  brand: { color: colours.dark, fontSize: 27, fontWeight: '800', letterSpacing: -1.5 },
-  content: { padding: 17, gap: 15, width: '100%', maxWidth: 560, alignSelf: 'center' },
-  card: { borderWidth: 1, borderColor: '#dce8de', borderRadius: 20, padding: 21, backgroundColor: '#fff', gap: 12 },
-  ready: { backgroundColor: '#dff3e5', borderColor: '#b9dfc3' },
-  kicker: { color: colours.muted, fontSize: 15, fontWeight: '700' },
-  title: { color: colours.text, fontSize: 34, fontWeight: '800', letterSpacing: -1.4 },
+  top: {
+    paddingHorizontal: 20, paddingVertical: 10, minHeight: 63, flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'space-between',
+  },
+  brand: { color: colours.cream, fontFamily: headline, fontSize: 38, fontWeight: '800', letterSpacing: -1 },
+  content: { padding: 17, gap: 15, width: '100%', maxWidth: 520, alignSelf: 'center' },
+  card: { borderWidth: 1, borderColor: '#d2a0ab', borderRadius: 9, padding: 21, backgroundColor: colours.paper, gap: 13 },
+  ready: { backgroundColor: colours.green, borderColor: '#5e9c7e' },
+  readyRule: { borderColor: '#8bb79f' },
+  readyText: { color: colours.cream },
+  ticketHeader: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline',
+    gap: 8, borderBottomWidth: 1, borderColor: '#96657d', paddingBottom: 11,
+  },
+  kicker: { color: colours.ink, fontSize: 15, fontWeight: '700', flexShrink: 1 },
+  stamp: { color: colours.muted, fontFamily: mono, fontSize: 13, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' },
+  title: { color: colours.ink, fontFamily: headline, fontSize: 52, lineHeight: 51, fontWeight: '800', letterSpacing: -1 },
   description: { color: colours.muted, fontSize: 16, lineHeight: 23 },
-  label: { color: colours.text, fontSize: 15, fontWeight: '700', marginTop: 4 },
-  input: { borderWidth: 1, borderColor: '#cadbd0', borderRadius: 9, padding: 12, fontSize: 16, color: colours.text, minHeight: 47 },
+  label: { color: colours.ink, fontSize: 15, fontWeight: '700' },
+  input: { borderWidth: 1, borderColor: '#99697f', borderRadius: 5, padding: 12, fontSize: 16, color: colours.ink, backgroundColor: '#ffe2e3', minHeight: 47 },
   buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  button: { borderColor: '#dce6de', borderWidth: 1, borderRadius: 9, minHeight: 45, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 13, paddingVertical: 8, backgroundColor: '#fff' },
-  buttonText: { fontSize: 15, fontWeight: '700', color: colours.green },
-  primary: { backgroundColor: colours.green, borderColor: colours.green },
-  primaryText: { color: '#fff' },
+  button: { borderColor: '#a16e88', borderWidth: 1, borderRadius: 6, minHeight: 45, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 13, paddingVertical: 8, backgroundColor: '#ffdadc' },
+  buttonText: { fontSize: 15, fontWeight: '700', color: colours.ink },
+  darkButton: { backgroundColor: '#3c2a41', borderColor: '#725a77' },
+  darkButtonText: { color: colours.cream },
+  primary: { backgroundColor: '#3b2540', borderColor: '#3b2540' },
+  primaryText: { color: colours.cream },
   dimmed: { opacity: .65 },
-  error: { color: '#942817', fontSize: 15, lineHeight: 21 },
-  camera: { flex: 1, backgroundColor: '#fff' },
-  ticketNo: { color: colours.text, fontSize: 59, letterSpacing: -4, fontWeight: '800' },
+  error: { color: '#821d35', fontSize: 15, lineHeight: 21 },
+  camera: { flex: 1, backgroundColor: colours.surface },
+  positionCaption: { color: colours.ink, fontFamily: headline, fontSize: 31, lineHeight: 31, fontWeight: '800' },
+  positionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5 },
+  position: { color: colours.ink, fontFamily: headline, fontSize: 123, fontWeight: '900', letterSpacing: -5, lineHeight: 115, includeFontPadding: false },
+  positionSuffix: { color: colours.ink, fontFamily: headline, fontSize: 36, lineHeight: 41, fontWeight: '800' },
+  queueNote: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 3, color: colours.ink, backgroundColor: colours.butter, fontWeight: '700' },
+  stub: { flexDirection: 'row', gap: 15, borderTopWidth: 2, borderStyle: 'dashed', borderColor: '#96657d', paddingTop: 13, marginTop: 2 },
+  stubNumber: { borderRightWidth: 1, borderColor: '#a26c83', paddingRight: 15 },
+  stubDetails: { flex: 1, minWidth: 0, justifyContent: 'center' },
+  ticketNo: { color: colours.ink, fontFamily: headline, fontSize: 37, fontWeight: '800', letterSpacing: -1 },
 });

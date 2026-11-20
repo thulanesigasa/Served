@@ -1,5 +1,5 @@
 const CACHE = 'served-__BUILD__';
-const SHELL = ['/', '/app.js', '/styles.css', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
+const SHELL = ['/', '/app.js', '/styles.css', '/barlow-condensed-800.woff2', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
 });

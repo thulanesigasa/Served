@@ -5,6 +5,8 @@ import { readFile, mkdir, copyFile } from 'node:fs/promises';
 const mime = {
   '/': 'text/html; charset=utf-8', '/app.js': 'text/javascript; charset=utf-8',
   '/styles.css': 'text/css; charset=utf-8', '/sw.js': 'text/javascript; charset=utf-8',
+  '/barlow-condensed-800.woff2': 'font/woff2',
+  '/LICENSE-Barlow-Condensed.txt': 'text/plain; charset=utf-8',
   '/manifest.webmanifest': 'application/manifest+json; charset=utf-8',
   '/icon-192.png': 'image/png', '/icon-512.png': 'image/png',
 };
