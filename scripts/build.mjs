@@ -1,6 +1,7 @@
 import { build } from 'esbuild';
 import { createHash } from 'node:crypto';
 import { readFile, mkdir, copyFile } from 'node:fs/promises';
+import { demoItems } from '../web/menu-catalog.js';
 
 const mime = {
   '/': 'text/html; charset=utf-8', '/app.js': 'text/javascript; charset=utf-8',
@@ -8,8 +9,7 @@ const mime = {
   '/barlow-condensed-800.woff2': 'font/woff2',
   '/LICENSE-Barlow-Condensed.txt': 'text/plain; charset=utf-8',
   '/manifest.webmanifest': 'application/manifest+json; charset=utf-8',
-  '/demo/burger.webp': 'image/webp', '/demo/chicken.webp': 'image/webp',
-  '/demo/pizza.webp': 'image/webp', '/demo/lemonade.webp': 'image/webp',
+  ...Object.fromEntries(demoItems.map(({ photo }) => ['/demo/' + photo + '.webp', 'image/webp'])),
   '/served-favicon.png': 'image/png', '/favicon.ico': 'image/x-icon',
   '/served-logo.png': 'image/png',
   '/icon-192.png': 'image/png', '/icon-512.png': 'image/png',

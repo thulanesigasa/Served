@@ -165,7 +165,7 @@ async function webhook(request, env, db) {
 }
 
 function menuItems(db, venueId) {
-  return db('SELECT id, name, description, price FROM menu_items WHERE venue_id = ? AND available = 1 ORDER BY name', venueId).all();
+  return db('SELECT id, name, description, price, category FROM menu_items WHERE venue_id = ? AND available = 1 ORDER BY name', venueId).all();
 }
 
 export async function ordering(request, env, db, section, id, action, data) {
@@ -260,7 +260,7 @@ export async function ordering(request, env, db, section, id, action, data) {
       db(`SELECT t.id, t.label, (${activeOrder('t.id')} OR EXISTS (
         SELECT 1 FROM table_reservations r WHERE r.table_id = t.id AND r.expires_at > ?
       )) AS occupied FROM dining_tables t WHERE t.venue_id = ? ORDER BY t.label`, Date.now(), id).all(),
-      db('SELECT id, name, description, price, available FROM menu_items WHERE venue_id = ? ORDER BY name', id).all(),
+      db('SELECT id, name, description, price, available, category FROM menu_items WHERE venue_id = ? ORDER BY name', id).all(),
       db(`SELECT o.*, t.label AS table_label FROM food_orders o JOIN dining_tables t ON t.id = o.table_id
           WHERE o.venue_id = ? AND o.status <> 'pending' AND (o.status <> 'delivered' OR o.updated_at >= ?)
           ORDER BY o.number DESC LIMIT 200`, id, Date.now() - 86_400_000).all(),
@@ -276,13 +276,15 @@ export async function ordering(request, env, db, section, id, action, data) {
   }
   if (action === 'menu' && method === 'POST') {
     const name = clean(data.name), description = clean(data.description);
+    const category = clean(data.category);
+    if (category.length > 32) return error('Enter a category up to 32 characters.', 400);
     if (!name || name.length > 80 || description.length > 160 || !Number.isInteger(data.price) ||
         data.price < 100 || data.price > 1_000_000 || typeof data.available !== 'boolean') return error('Enter valid item details and price.', 400);
     const item = validId(data.id)
-      ? await db(`UPDATE menu_items SET name = ?, description = ?, price = ?, available = ?
-                  WHERE id = ? AND venue_id = ? RETURNING id`, name, description, data.price, Number(data.available), data.id, id).first()
-      : await db(`INSERT INTO menu_items (id, venue_id, name, description, price, available)
-                  VALUES (?, ?, ?, ?, ?, ?) RETURNING id`, uuid(), id, name, description, data.price, Number(data.available)).first();
+      ? await db(`UPDATE menu_items SET name = ?, description = ?, price = ?, available = ?, category = COALESCE(?, category)
+                  WHERE id = ? AND venue_id = ? RETURNING id`, name, description, data.price, Number(data.available), category || null, data.id, id).first()
+      : await db(`INSERT INTO menu_items (id, venue_id, name, description, price, available, category)
+                  VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`, uuid(), id, name, description, data.price, Number(data.available), category || 'Other').first();
     return item ? out(item) : error('Menu item unavailable.', 404);
   }
   if (action === 'order' && method === 'PATCH') {

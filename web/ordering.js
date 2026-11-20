@@ -34,6 +34,13 @@ async function api(path, token, method = 'GET', body) {
   return data;
 }
 
+function categoryTabs(items, selected, action, includeAll = false) {
+  const labels = [...(includeAll ? ['All'] : []), ...menuCategories(items)];
+  return `<nav class="menu-category-tabs" aria-label="Menu categories">${labels.map(label =>
+    `<button type="button" data-order-action="${action}" data-value="${esc(label)}"
+      aria-pressed="${label === selected}">${esc(label)}</button>`).join('')}</nav>`;
+}
+
 function listItems(items) {
   return `<ul class="food-list">${items.map(item => `<li><span>${item.quantity} × ${esc(item.name)}</span><span>${money(item.price * item.quantity)}</span></li>`).join('')}</ul>`;
 }
@@ -139,7 +146,8 @@ export function guestOrdering(app, params) {
       <h1>${esc(table.venue_name)}</h1>
       ${reservationCard()}
       <h2>Menu</h2>
-      ${table.items.length ? `<ul class="menu-list">${table.items.map(item => {
+      ${categoryTabs(table.items, category, 'demo-category', true)}
+      ${table.items.length ? `<ul class="menu-list">${table.items.filter(item => category === 'All' || item.category === category).map(item => {
         const quantity = quantities[item.id] || 0;
         return `<li><div><strong>${esc(item.name)}</strong>${item.description ? `<p>${esc(item.description)}</p>` : ''}<span>${money(item.price)}</span></div>
           <div class="quantity" aria-label="${esc(item.name)} quantity">
@@ -352,8 +360,11 @@ export function guestOrdering(app, params) {
         }
         render(control.dataset);
       } else if (action === 'demo-category') {
+        const scroll = control.parentElement.scrollLeft;
         category = value;
         render(control.dataset);
+        const selected = app.querySelector('[data-order-action="demo-category"][aria-pressed="true"]');
+        if (selected) selected.parentElement.scrollLeft = scroll;
       } else if (action === 'demo-cart') {
         cartOpen = !cartOpen;
         demoPayment = false;
@@ -469,6 +480,7 @@ export function staffOrdering(app, venueConfig, { notice, modal }) {
   let view = 'queue';
   let state;
   let editing;
+  let selectedCategory;
   let requestBusy = false;
   let problem = '';
   const isActive = () => Boolean(app.querySelector('#staff-ordering'));
@@ -491,21 +503,26 @@ export function staffOrdering(app, venueConfig, { notice, modal }) {
   function menu() {
     const published = state.items.some(item => item.available);
     const items = published ? state.items : demoItems;
-    const groups = published ? ['Restaurant menu'] : menuCategories(items);
+    const groups = menuCategories(items);
+    if (!groups.includes(selectedCategory)) selectedCategory = groups[0];
     return `<section class="staff-catalog">
       <h2>${published ? 'Restaurant menu' : 'Demo menu'} <small>${items.length} items</small></h2>
       <a class="btn" href="${url({ table:venueConfig.venue.id })}" target="_blank" rel="noopener">Open guest menu</a>
-      ${groups.map(group => `<section><h3>${esc(group)}</h3>
-        <ul>${items.filter(item => published || item.category === group).map(item =>
-          `<li><div><strong>${esc(item.name)}</strong><p>${esc(item.description)}</p>
+      <section><h3>${esc(selectedCategory)}</h3>
+        <ul>${items.filter(item => item.category === selectedCategory).map(item =>
+          `<li>${item.photo ? `<img src="/demo/${item.photo}.webp" alt="" width="64" height="64" loading="lazy">` : ''}
+          <div><strong>${esc(item.name)}</strong><p>${esc(item.description)}</p>
             ${published && !item.available ? '<p>Hidden from guests</p>' : ''}</div><strong>${money(item.price)}</strong>
-            ${published ? button('staff-edit', 'Edit', '', item.id) : ''}</li>`).join('')}</ul></section>`).join('')}
+            ${published ? button('staff-edit', 'Edit', '', item.id) : ''}</li>`).join('')}</ul></section>
+      ${categoryTabs(items, selectedCategory, 'staff-category')}
     </section>
     <details class="staff-menu-editor" ${editing ? 'open' : ''}><summary>Manage custom items</summary>
       <form id="staff-menu" class="staff-order-form">
       <h2>${editing ? 'Edit menu item' : 'Add custom menu item'}</h2>
       <label>Name <input name="name" maxlength="80" required value="${esc(editing?.name)}"></label>
       <label>Description <input maxlength="160" name="description" value="${esc(editing?.description)}"></label>
+      <label>Category <input name="category" maxlength="32" list="staff-menu-categories" value="${esc(editing?.category)}" placeholder="Other"></label>
+      <datalist id="staff-menu-categories">${menuCategories(demoItems).map(label => `<option value="${esc(label)}"></option>`).join('')}</datalist>
       <label>Price in rand <input type="number" name="price" min="1" max="10000" step="0.01" required value="${editing ? (editing.price / 100).toFixed(2) : ''}"></label>
       <label class="settings-check"><input type="checkbox" name="available" ${editing?.available === 0 ? '' : 'checked'}> Available on menu</label>
       <button class="btn primary">Save item</button>${editing ? button('staff-clear', 'Cancel edit') : ''}
@@ -578,6 +595,14 @@ export function staffOrdering(app, venueConfig, { notice, modal }) {
     try {
       problem = '';
       if (action === 'staff-view') { view = value; editing = null; render(); }
+      if (action === 'staff-category') {
+        const scroll = control.parentElement.scrollLeft;
+        selectedCategory = value;
+        render();
+        const selected = app.querySelector('#staff-ordering [data-order-action="staff-category"][aria-pressed="true"]');
+        selected.parentElement.scrollLeft = scroll;
+        selected.focus({ preventScroll:true });
+      }
       if (action === 'staff-edit') { editing = state.items.find(item => item.id === value); render(); }
       if (action === 'staff-clear') { editing = null; render(); }
       if (action === 'staff-qr') await showQr(state.tables.find(table => table.id === value));
@@ -604,7 +629,7 @@ export function staffOrdering(app, venueConfig, { notice, modal }) {
     try {
       if (form.id === 'staff-menu') {
         await call('/menu', 'POST', {
-          id: editing?.id, name: values.get('name'), description: values.get('description'),
+          id: editing?.id, name: values.get('name'), description: values.get('description'), category: values.get('category') || 'Other',
           price: Math.round(Number(values.get('price')) * 100), available: values.has('available'),
         });
         editing = null;

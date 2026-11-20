@@ -1,6 +1,6 @@
 const catalog = {
   Burgers: [
-    ['burger', 'Double Smash Burger', 89, 'Two smashed beef patties, melted cheddar, pickles and house sauce.', 'burger'],
+    ['burger', 'Double Smash Burger', 89, 'Two smashed beef patties, melted cheddar, pickles and house sauce.'],
     ['classic-beef', 'Classic Beef Burger', 72, 'Grilled beef, lettuce, tomato, red onion and house sauce.'],
     ['bbq-bacon', 'BBQ Bacon Burger', 96, 'Smoky bacon, cheddar and barbecue sauce on a grilled beef patty.'],
     ['mushroom-swiss', 'Mushroom & Swiss Burger', 93, 'Grilled beef with sautéed mushrooms and melted Swiss cheese.'],
@@ -8,7 +8,7 @@ const catalog = {
     ['garden-burger', 'Garden Burger', 79, 'Chickpea patty with tomato, cucumber and lemon mayo.'],
   ],
   Chicken: [
-    ['chicken', 'Hot Honey Chicken Combo', 109, 'Crispy hot honey chicken with a side of seasoned fries.', 'chicken'],
+    ['chicken', 'Hot Honey Chicken Combo', 109, 'Crispy hot honey chicken with a side of seasoned fries.'],
     ['grilled-chicken', 'Lemon & Herb Chicken', 108, 'Grilled chicken breast with lemon, herbs and chips.'],
     ['peri-peri-wings', 'Peri-Peri Wings', 90, 'Six chicken wings tossed in peri-peri sauce.'],
     ['bbq-wings', 'Smoky BBQ Wings', 89, 'Six grilled wings glazed with smoky barbecue sauce.'],
@@ -16,7 +16,7 @@ const catalog = {
     ['chicken-wrap', 'Grilled Chicken Wrap', 79, 'Grilled chicken, lettuce, tomato and garlic mayo in a soft wrap.'],
   ],
   Pizza: [
-    ['pizza', 'Pepperoni Pizza', 115, 'Pepperoni, mozzarella and basil on a blistered crust.', 'pizza'],
+    ['pizza', 'Pepperoni Pizza', 115, 'Pepperoni, mozzarella and basil on a blistered crust.'],
     ['margherita', 'Margherita Pizza', 95, 'Tomato, mozzarella and fresh basil.'],
     ['bbq-chicken-pizza', 'BBQ Chicken Pizza', 125, 'Barbecue chicken, red onion and mozzarella.'],
     ['roasted-veg-pizza', 'Roasted Vegetable Pizza', 110, 'Roasted peppers, mushrooms, onion and feta.'],
@@ -48,7 +48,7 @@ const catalog = {
     ['rooibos-cooler', 'Peach Rooibos Cooler', 49, 'Cold rooibos, peach and lemon.'],
   ],
   Lemonades: [
-    ['lemonade', 'Berry Lemonade', 39, 'Sparkling lemonade with muddled berries and mint.', 'lemonade'],
+    ['lemonade', 'Berry Lemonade', 39, 'Sparkling lemonade with muddled berries and mint.'],
     ['classic-lemonade', 'Classic Lemonade', 35, 'Fresh lemon, cane sugar and sparkling water.'],
     ['cucumber-lemonade', 'Cucumber Mint Lemonade', 42, 'Lemonade with cucumber slices and fresh mint.'],
     ['mango-lemonade', 'Mango Lemonade', 45, 'Mango and fresh lemon over ice.'],
@@ -60,8 +60,8 @@ const catalog = {
 };
 
 export const demoItems = Object.entries(catalog).flatMap(([category, items]) =>
-  items.map(([id, name, rand, description, photo]) => ({
-    id, name, category, price:rand * 100, description, photo,
+  items.map(([id, name, rand, description]) => ({
+    id, name, category, price:rand * 100, description, photo:id,
   })),
 );
 

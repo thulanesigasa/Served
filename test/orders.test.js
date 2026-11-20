@@ -36,13 +36,14 @@ test('table checkout verifies the payment before exposing an order to staff', as
   const staff = 'ordering/' + venue.id;
   assert.equal((await send(staff))[0], 401);
   const [, table] = await send(staff + '/table', 'POST', { label:'Table 5' }, staffToken);
-  const [, item] = await send(staff + '/menu', 'POST', { name:'Chips', description:'With salt', price:4000, available:true }, staffToken);
+  const [, item] = await send(staff + '/menu', 'POST', { name:'Chips', description:'With salt', price:4000, available:true, category:'Sides' }, staffToken);
   const menu = 'menus/' + table.id;
   assert.equal((await send(menu))[1].payment_available, false);
   const [catalogStatus, catalog] = await send('menus/' + venue.id);
   assert.equal(catalogStatus, 200);
   assert.equal(catalog.general, true);
   assert.equal(catalog.venue_name, 'Test cafe');
+  assert.equal(catalog.items[0].category, 'Sides');
   assert.deepEqual(catalog.tables, [table]);
   assert.deepEqual(catalog.items, (await send(menu))[1].items);
   assert.equal((await send('menus/' + venue.id + '/checkout', 'POST', {}))[0], 404);
