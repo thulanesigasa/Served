@@ -452,3 +452,107 @@ dialog::backdrop { background: #1a101dc4; }
   .ticket-row .actions .pale svg { display: none; }
   .guest { --pad: 17px; padding-inline: 15px; }
 }
+
+.brand-logo, .order-header img { display: block; background: #fff; object-fit: contain; }
+.order-app { max-width: 610px; padding-bottom: 109px; }
+.order-header { padding: 5px 6px 15px; }
+.order-header a { display: inline-block; }
+.order-header img, .brand-logo { border-radius: 3px; }
+.order-paper {
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid #d2a0ab;
+  border-radius: 9px;
+  padding: clamp(16px, 5vw, 25px);
+}
+.order-paper h1 { font-size: clamp(2.7rem, 9vw, 4.5rem); overflow-wrap: anywhere; }
+.order-paper h2 { margin-top: 19px; }
+.order-paper p { line-height: 1.5; margin: 9px 0; }
+.order-paper form, .order-paper > .btn { margin-top: 15px; }
+.order-paper .btn { color: var(--ink); background: #ffdadc; border-color: #a16e88; }
+.order-paper .btn.primary { color: var(--cream); background: #3b2540; border-color: #3b2540; }
+.order-tabs {
+  z-index: 4;
+  position: fixed;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(280px, calc(100% - 28px));
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 3px;
+  border: 1px solid #d6a7b7;
+  border-radius: 16px;
+  background: #fff1e9;
+  box-shadow: 0 8px 18px #190e1d65;
+}
+.order-tabs button {
+  min-height: 49px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: #664957;
+  font-size: .75rem;
+}
+.order-tabs button[aria-current] { color: #72304d; font-weight: 800; }
+.order-tabs button[aria-current]::after {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.menu-list, .food-list { list-style: none; margin: 10px 0 0; padding: 0; }
+.menu-list li, .food-list li, .order-line, .order-total, .kitchen-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.menu-list li { padding: 14px 0; border-bottom: 1px solid #c28ea1; }
+.menu-list li p { margin: 3px 0; }
+.menu-list li strong, .order-line strong { overflow-wrap: anywhere; }
+.quantity { display: flex; align-items: center; gap: 7px; }
+.order-paper .quantity .btn {
+  min-width: 38px;
+  padding: 4px;
+  font-size: 1.2rem;
+  background: transparent;
+  border-color: transparent;
+}
+.quantity > span { min-width: 1.4em; text-align: center; }
+.order-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.food-list li { padding: 6px 0; }
+.food-list li > :last-child { white-space: nowrap; }
+.order-paper .order-total { margin: 5px 0; padding-block: 9px; border-top: 1px solid #a3748b; }
+.order-ticket-stub {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 11px;
+  border-top: 2px dashed #a3748b;
+  font-weight: 700;
+}
+.order-ready { color: var(--cream); background: #71334f; border-color: #c693a9; }
+.order-buttons { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
+.order-line { flex-wrap: wrap; justify-content: flex-start; padding: 12px 0; border-bottom: 1px solid #a3748b; }
+.order-line > :first-child { flex: 1; min-width: 110px; }
+.order-line p { margin: 3px 0 0; }
+.settings-check { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.settings-check input { width: 19px; height: 19px; min-height: 0; accent-color: #71334f; }
+.order-error { padding: 10px 0; color: var(--rose); }
+.staff-order-nav { display: flex; flex-wrap: wrap; gap: 7px; padding: 13px; border-bottom: 1px solid var(--line); }
+.staff-order-content { padding: 8px 14px 15px; display: grid; gap: 12px; }
+.staff-order-form { margin: 8px 0; max-width: 420px; }
+.order-empty { padding: 14px; color: var(--muted); }
+.kitchen-ticket { padding: 13px; border-bottom: 1px solid var(--line); }
+.kitchen-ticket h3 { margin: 0; font-size: 1.05rem; }
+.kitchen-ticket p { margin-top: 5px; }
+.kitchen-ticket .btn { margin-top: 8px; }
+@media (max-width: 450px) { .nav-inner { flex-wrap: wrap; justify-content: flex-start; } }

@@ -23,7 +23,7 @@
     },
     "github-release": {
       "extends": "production",
-      "autoIncrement": false,
+      "autoIncrement": true,
       "android": {
         "buildType": "apk"
       }

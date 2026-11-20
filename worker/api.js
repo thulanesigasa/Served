@@ -1,3 +1,4 @@
+import { ordering } from './orders.js';
 import { digest as hash, guestAuth } from './guests.js';
 
 const json = (data, status = 200) => Response.json(data, {
@@ -42,10 +43,14 @@ export async function api(request, env) {
   if (write && request.headers.get('origin') && request.headers.get('origin') !== url.origin) {
     return fail('Open Served to make this change.', 403);
   }
+  if (collection === 'paystack') return ordering(request, env, statement, collection, id, action);
   let data;
   if (write) {
     try { data = await readBody(request); }
     catch { return fail('Send valid queue details.', 400); }
+  }
+  if (['orders', 'ordering', 'menus'].includes(collection)) {
+    return ordering(request, env, statement, collection, id, action, data);
   }
   if (collection === 'guests' && !action) {
     const { status, body } = await guestAuth(request, statement, id, data);

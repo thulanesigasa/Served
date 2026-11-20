@@ -10,6 +10,12 @@ Run `npm ci` and `npm run dev` with Node.js 24 or newer. Local preview uses SQLi
 
 Open the staff dashboard and select **Set up a venue** to get a live queue. Open **Guest QR** to download the venue’s QR code. Keep a copy of the venue’s staff access key if you need to open the same queue on another device.
 
+## Table ordering
+
+In the dashboard, open **Orders → Menu** to publish items in rand. Then open **Table QR** to create and download a unique code for each table. A guest can scan a code in the app or open the browser menu immediately. The checkout verifies a ZAR transaction server-side before the order enters the kitchen queue. Staff can start preparing it, mark it ready for the waiter, and mark it delivered. The guest can also confirm receipt once the order is ready.
+
+Configure the deployment secret `PAYSTACK_VENUES` as a JSON map from Served venue ID to that venue’s Paystack live secret key. Use each venue’s own credential to route funds to its merchant account. Find a venue ID in the staff settings at the beginning of the staff access key, before the period. Configure the merchant’s webhook URL as `https://served-queue.zippybasil1024.chatgpt.site/api/paystack/webhook`. The hosted checkout callback also verifies payment before use. Without a merchant configuration the menu is visible and Pay remains disabled.
+
 ## Mobile app
 
 The Expo app is in `mobile/`. Guests can scan a QR code, paste a guest link, reopen their last ticket, see an estimated wait, and receive an in-app sound and vibration when called. Live alerts require Served to remain open. The native app uses the hosted queue unless `EXPO_PUBLIC_SERVED_URL` is configured in the matching Expo environment.

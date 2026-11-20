@@ -1,13 +1,13 @@
 import React, { useRef, useState } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { request } from './served';
 
 const welcome = [
-  ['Scan. Join. Relax.', 'Use the restaurant’s QR code to join its table or pickup queue.'],
-  ['Your phone is your ticket.', 'See your place in line, your estimated wait and your ticket number.'],
-  ['We’ll call you when it’s time.', 'Keep your ticket open for a sound and vibration when your table or order is ready.'],
+  ['Scan. Join. Relax.', 'Scan the QR code at your table to open the restaurant’s menu.'],
+  ['Your phone is your ticket.', 'Select your food, pay securely and follow your live order ticket.'],
+  ['We’ll call you when it’s time.', 'Keep the app open to get an alert when your waiter is on the way.'],
 ];
 
 export function Entry({ ready, onWelcome, onSession }) {
@@ -53,7 +53,7 @@ export function Entry({ ready, onWelcome, onSession }) {
 
   return <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.screen}>
-      <Text accessibilityRole="header" style={styles.brand}>Served</Text>
+      <Image source={require('../assets/splash.png')} accessibilityLabel="Served" resizeMode="contain" style={styles.brand} />
       {!ready ? <View style={styles.paper}>
         <Text style={styles.label}>Welcome {step + 1} of 3</Text>
         <Text accessibilityRole="header" style={styles.title}>{welcome[step][0]}</Text>
@@ -113,7 +113,7 @@ export function Entry({ ready, onWelcome, onSession }) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   screen: { padding: 18, paddingTop: 25, gap: 22, width: '100%', maxWidth: 520, alignSelf: 'center' },
-  brand: { color: '#fff4e4', fontSize: 36, fontWeight: '800' },
+  brand: { width: 106, height: 53, backgroundColor: '#fff' },
   paper: { backgroundColor: '#f7cdd0', padding: 21, borderRadius: 9, gap: 11 },
   title: { color: '#321e32', fontSize: 38, lineHeight: 42, letterSpacing: -1.2, fontWeight: '900' },
   body: { color: '#57364f', fontSize: 15, lineHeight: 22 },

@@ -1,5 +1,6 @@
 import QRCode from 'qrcode';
 import { icon } from './icons.js';
+import { guestOrdering, staffOrdering } from './ordering.js';
 
 const app = document.querySelector('#app');
 const dialog = document.querySelector('#dialog');
@@ -7,7 +8,7 @@ const toast = document.querySelector('#toast');
 const params = new URLSearchParams(location.search);
 const guest = params.has('venue') || params.has('ticket');
 const demo = params.get('venue') === 'demo' || params.get('demo') === '1';
-const screen = { tab: 'queue', filter: 'all', queue: [], lastGood: true };
+const screen = { tab: 'ordering', filter: 'all', queue: [], lastGood: true };
 const uuid = () => crypto.randomUUID().replaceAll('-', '');
 const read = key => JSON.parse(localStorage.getItem(key) || 'null');
 const write = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -20,6 +21,8 @@ const link = query => location.origin + '/' + (query ? '?' + new URLSearchParams
 const currentVenue = read('served.staff');
 const guestLanding = params.has('guest') || (params.has('launch') && !currentVenue);
 const hasStaff = Boolean(currentVenue);
+const orderGuest = params.has('shell') || params.has('table') || params.has('order') || (guestLanding && !guest);
+let orderingDashboard;
 let installPrompt;
 let toastTimer;
 let guestVenue;
@@ -76,10 +79,10 @@ function addDemo(data) {
   write('served.demo', [...rows, row]);
   return row;
 }
-const brand = () => `<a class="brand" href="/" aria-label="Served home"><span class="brandmark">${icon('bell', 20)}</span>Served</a>`;
+const brand = () => `<a class="brand" href="/" aria-label="Served home"><img class="brand-logo" src="/served-logo.png" alt="Served" width="100" height="43"></a>`;
 const actionButton = (action, content, classes = '', title = '') =>
   `<button type="button" class="btn ${classes}" data-action="${action}" ${title ? `aria-label="${title}" title="${title}"` : ''}>${content}</button>`;
-const navItems = [['queue','grid','Live queue'],['qr','qr','Guest QR'],['history','history','History'],['install','download','Install app']];
+const navItems = [['ordering','bag','Orders'],['queue','grid','Live queue'],['qr','qr','Guest QR'],['history','history','History'],['install','download','Install app']];
 const formFields = () => `
   <label>Name or order reference <input name="name" required maxlength="45" autocomplete="off" placeholder="e.g. Maya Patel"></label>
   <fieldset><legend>Ticket type</legend><div class="kinds">
@@ -150,6 +153,7 @@ function stats() {
 }
 function renderDashboard() {
   const titles = {
+    ordering: ['Restaurant orders', 'Publish your menu, set up table QR codes and manage paid orders.'],
     queue: ['Live queue', 'Manage tables and pickups from one place.'],
     qr: ['Guest QR', 'Give guests a link to join the queue.'],
     history: ['Ticket history', 'See how recent tickets were closed.'],
@@ -157,6 +161,8 @@ function renderDashboard() {
   };
   const [title, subtitle] = titles[screen.tab];
   const contents = {
+    ordering: () => hasStaff ? '<section class="surface" id="staff-ordering"></section>'
+      : `<section class="surface setup"><h2>Set up your restaurant</h2><p>Add a menu and create a QR code for each table.</p>${actionButton('setup', 'Set up a restaurant', 'primary')}</section>`,
     queue: () => stats() + queuePanel(false), qr: qrPanel, history: () => queuePanel(true),
     install: () => `<section class="surface setup"><h2>Add Served to your home screen</h2>
     <p><strong>Android:</strong> Open Served in Chrome and choose Install app or Add to Home screen from the menu.</p>
@@ -170,7 +176,7 @@ function renderDashboard() {
       <div class="top-actions">
         ${hasStaff ? '<button type="button" class="btn live" id="connection" data-action="venue" aria-label="Venue settings">' + (screen.lastGood ? 'Live' : 'Reconnecting') + '</button>' :
           actionButton('setup', 'Demo mode', 'mode-label', 'Demo mode. Set up a venue')}
-        <a class="btn view-guest" href="${escape(hasStaff ? guestLink() : link({ guest: 1 }))}" target="_blank" rel="noopener" aria-label="Guest view">${icon('phone', 17)} <span>Guest view</span></a>
+        <a class="btn view-guest" href="${escape(link({ shell: 'guest' }))}" target="_blank" rel="noopener" aria-label="Guest view">${icon('phone', 17)} <span>Guest view</span></a>
       </div>
     </div></header>
     <nav class="nav" aria-label="Main navigation"><div class="nav-inner">${navItems.map(([key, symbol, text]) =>
@@ -182,6 +188,11 @@ function renderDashboard() {
     </main>
   </div>`;
   if (screen.tab === 'qr' && hasStaff) setQr();
+  if (screen.tab === 'ordering' && hasStaff) {
+    orderingDashboard ||= staffOrdering(app, currentVenue, { notice, modal });
+    orderingDashboard.render();
+    orderingDashboard.refresh();
+  }
 }
 function updateDashboard() {
   const content = document.querySelector('#dashboard-content');
@@ -324,7 +335,7 @@ async function refreshGuest(initial = false) {
   }
 }
 async function refresh() {
-  if (guestLanding || refreshing || document.hidden) return;
+  if (guestLanding || orderGuest || refreshing || document.hidden) return;
   refreshing = true;
   try {
     if (guest) return await refreshGuest();
@@ -555,7 +566,9 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-if (guest) {
+if (orderGuest) {
+  guestOrdering(app, params);
+} else if (guest) {
   renderGuest();
 } else if (guestLanding) {
   renderGuestHome();
@@ -566,7 +579,7 @@ if (guest) {
     <label>Staff access key <input name="key" required autocomplete="off" spellcheck="false"></label>
     <span class="error" aria-live="polite"></span><button class="btn primary">Open venue</button></form>`);
 }
-if (!guestLanding) {
+if (!guestLanding && !orderGuest) {
   refresh();
   setInterval(refresh, 3500);
 }

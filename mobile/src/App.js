@@ -12,6 +12,7 @@ import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import { randomUUID } from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { Entry } from './Entry';
+import { OrderShell } from './OrderShell';
 import { guestDestination, origin, request, ticketDetails } from './served';
 
 const WELCOME_KEY = 'served.welcomeSeen';
@@ -101,7 +102,7 @@ function GuestForm({ venue, guestName, onJoin }) {
   </>;
 }
 
-function Served({ guest, onSignOut }) {
+function Served({ guest, initialLink, onBack }) {
   const lastTicketKey = 'served.lastTicket.' + guest.id;
   const [destination, setDestination] = useState(null);
   const [venue, setVenue] = useState(null);
@@ -170,6 +171,7 @@ function Served({ guest, onSignOut }) {
 
   useEffect(() => {
     AsyncStorage.getItem(lastTicketKey).then(value => setLastTicket(previous => previous || value || '')).catch(() => {});
+    if (initialLink) openLink(initialLink);
     const appLink = value => {
       const prefix = 'served://open?url=';
       if (!value.startsWith(prefix)) return;
@@ -308,7 +310,7 @@ function Served({ guest, onSignOut }) {
                 {!!lastTicket && <Button onPress={() => open({ ticket: lastTicket })}>Open my last ticket</Button>}
               </>}
           </Animated.View>
-          {!destination && <Button onDark onPress={onSignOut}>Sign out</Button>}
+          {!destination && <Button onDark onPress={onBack}>Back to ordering</Button>}
         </ScrollView>
       </KeyboardAvoidingView>}
   </SafeAreaView>;
@@ -317,6 +319,7 @@ function Served({ guest, onSignOut }) {
 function GuestApp() {
   const [state, setState] = useState({ loading: true, welcome: false, session: null });
   const confirmingExit = useRef(false);
+  const [legacy, setLegacy] = useState(null);
   useEffect(() => {
     let active = true;
     async function start() {
@@ -385,7 +388,9 @@ function GuestApp() {
     setState(previous => ({ ...previous, session: null }));
     request('guests/logout', {}, undefined, state.session.token).catch(() => {});
   }
-  if (state.session) return <Served guest={state.session.guest} onSignOut={signOut} />;
+  if (state.session) return legacy
+    ? <Served guest={state.session.guest} initialLink={legacy} onBack={() => setLegacy(null)} />
+    : <OrderShell session={state.session} onSignOut={signOut} onLegacy={setLegacy} />;
   return <SafeAreaView style={styles.safe}>
     <StatusBar style="light" />
     {state.loading ? <ActivityIndicator color={colours.rose} style={styles.boot} />
