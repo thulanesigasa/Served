@@ -12,7 +12,7 @@ if (config.expo.runtimeVersion !== '1.0.1') {
 config.expo.updates = {
   ...config.expo.updates,
   url: 'https://u.expo.dev/' + projectId,
-  checkAutomatically: 'ON_LOAD',
+  checkAutomatically: 'NEVER',
   fallbackToCacheTimeout: 0,
 };
 fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');

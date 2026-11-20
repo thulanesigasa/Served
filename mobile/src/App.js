@@ -13,6 +13,7 @@ import { randomUUID } from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { Entry } from './Entry';
 import { OrderShell } from './OrderShell';
+import { UpdatePrompt } from './UpdatePrompt';
 import { guestDestination, origin, request, ticketDetails } from './served';
 
 const WELCOME_KEY = 'served.welcomeSeen';
@@ -399,7 +400,7 @@ function GuestApp() {
 }
 
 export default function App() {
-  return <SafeAreaProvider><GuestApp /></SafeAreaProvider>;
+  return <SafeAreaProvider><GuestApp /><UpdatePrompt /></SafeAreaProvider>;
 }
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colours.surface },

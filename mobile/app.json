@@ -3,7 +3,7 @@
     "name": "Served",
     "slug": "served",
     "scheme": "served",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "runtimeVersion": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -28,7 +28,7 @@
       "permissions": [
         "android.permission.VIBRATE"
       ],
-      "versionCode": 3
+      "versionCode": 4
     },
     "plugins": [
       [
@@ -59,6 +59,10 @@
     "platforms": [
       "android",
       "ios"
-    ]
+    ],
+    "updates": {
+      "checkAutomatically": "NEVER",
+      "fallbackToCacheTimeout": 0
+    }
   }
 }
