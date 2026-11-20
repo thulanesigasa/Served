@@ -19,7 +19,7 @@
       "package": "za.co.tsindustries.served",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#12372d"
+        "backgroundColor": "#251929"
       },
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
@@ -27,7 +27,8 @@
       ],
       "permissions": [
         "android.permission.VIBRATE"
-      ]
+      ],
+      "versionCode": 1
     },
     "plugins": [
       [
@@ -43,7 +44,8 @@
           "microphonePermission": false,
           "recordAudioAndroid": false
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "platforms": [
       "android",

@@ -1,12 +1,10 @@
+import { digest as hash, guestAuth } from './guests.js';
+
 const json = (data, status = 200) => Response.json(data, {
   status, headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' },
 });
 const fail = (message, status) => json({ error: message }, status);
 const token = () => crypto.randomUUID().replaceAll('-', '');
-const hash = async value => {
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
-};
 const name = value => typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
 const validId = value => /^[a-f0-9]{32}$/.test(value ?? '');
 const SELECT = 'number, id, name, kind, size, status, created_at, called_at, closed_at';
@@ -48,6 +46,10 @@ export async function api(request, env) {
   if (write) {
     try { data = await readBody(request); }
     catch { return fail('Send valid queue details.', 400); }
+  }
+  if (collection === 'guests' && !action) {
+    const { status, body } = await guestAuth(request, statement, id, data);
+    return json(body, status);
   }
   if (collection === 'venues' && !id && request.method === 'POST') {
     const venueName = name(data.name);
@@ -110,5 +112,16 @@ async function guestTicket(statement, ticket) {
   const { ahead } = await statement(
     "SELECT COUNT(*) AS ahead FROM tickets WHERE venue_id = ? AND kind = ? AND status = 'waiting' AND number < ?",
     ticket.venue_id, ticket.kind, ticket.number).first();
-  return { ...ticket, position: ahead + 1 };
+  const now = Date.now();
+  const { results: calls } = await statement(
+    `SELECT called_at FROM tickets WHERE venue_id = ? AND kind = ? AND called_at >= ?
+     ORDER BY called_at DESC LIMIT 12`, ticket.venue_id, ticket.kind, now - 90 * 60_000).all();
+  const intervals = calls.slice(1).map((call, i) => (calls[i].called_at - call.called_at) / 60_000)
+    .filter(minutes => minutes >= 1 && minutes <= 30).sort((a, b) => a - b);
+  const pace = intervals.length >= 3 ? intervals[Math.floor(intervals.length / 2)]
+    : ticket.kind === 'table' ? 6 : 4;
+  const elapsedSinceLastCall = calls.length ? (now - calls[0].called_at) / 60_000
+    : (now - ticket.created_at) / 60_000;
+  const eta = Math.max(1, Math.ceil(pace * (ahead + 1) - Math.min(pace - 1, elapsedSinceLastCall)));
+  return { ...ticket, position: ahead + 1, estimated_wait_minutes: eta };
 }

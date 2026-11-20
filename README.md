@@ -12,9 +12,13 @@ Open the staff dashboard and select **Set up a venue** to get a live queue. Open
 
 ## Mobile app
 
-The Expo app is in `mobile/`. Guests can scan a QR code, paste a guest link, reopen their last ticket, and receive an in-app sound and vibration when called. Live alerts require Served to remain open. The native app uses the hosted queue unless `EXPO_PUBLIC_SERVED_URL` is configured in the matching Expo environment.
+The Expo app is in `mobile/`. Guests can scan a QR code, paste a guest link, reopen their last ticket, see an estimated wait, and receive an in-app sound and vibration when called. Live alerts require Served to remain open. The native app uses the hosted queue unless `EXPO_PUBLIC_SERVED_URL` is configured in the matching Expo environment.
 
-Use **Actions → Served mobile build or OTA → Run workflow**.
+On first launch, guests see three welcome screens, then create an account or sign in. Android Back confirms exit without signing out.
+
+**GitHub Releases** holds the signed Android APK. **Publish Served Android APK** runs when `mobile/app.json` changes on `main`, or by manual dispatch. It uses the production update channel and publishes the verified APK and SHA-256 checksum.
+
+For other builds or OTA updates, use **Actions → Served mobile build or OTA → Run workflow**.
 
 | Profile | Android artifact | OTA channel |
 | --- | --- | --- |

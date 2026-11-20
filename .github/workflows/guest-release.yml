@@ -1,0 +1,115 @@
+name: Publish Served Android APK
+
+on:
+  push:
+    branches: [main]
+    paths: [mobile/app.json]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: served-android-github-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: mobile
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Check release version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -p 'require("./app.json").expo.version')"
+          case "$version" in
+            *[!0-9.]*|'') echo "::error::Invalid app version"; exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v$version is already published."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install mobile dependencies
+        if: steps.version.outputs.publish == 'true'
+        run: npm ci
+      - name: Connect Expo and build the signed Android APK
+        if: steps.version.outputs.publish == 'true'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          test -n "$EXPO_TOKEN" || { echo "::error::The EXPO_TOKEN Actions secret is required."; exit 1; }
+          npm install --global eas-cli@27.11.0
+          if [ -n "$EXPO_PROJECT_ID" ]; then
+            eas init --id "$EXPO_PROJECT_ID" --force --non-interactive
+          else
+            eas init --force --non-interactive
+          fi
+          node scripts/configure-updates.cjs
+          eas build --platform android --profile github-release --non-interactive --wait --json > "$RUNNER_TEMP/served-eas-build.json"
+          asset="$(node -e '
+            const response = require(process.argv[1]);
+            const build = Array.isArray(response) ? response[0] : response;
+            const url = build?.artifacts?.buildUrl || build?.artifacts?.applicationArchiveUrl;
+            if (!url || new URL(url).protocol !== "https:") throw new Error("Expo did not return an APK URL.");
+            process.stdout.write(url);
+          ' "$RUNNER_TEMP/served-eas-build.json")"
+          mkdir -p "$RUNNER_TEMP/served-release"
+          cd "$RUNNER_TEMP/served-release"
+          apk="Served-$APP_VERSION.apk"
+          curl --fail --location --retry 3 "$asset" --output "$apk"
+          sdk_tools="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -print | sort -V | tail -1)"
+          test -x "$sdk_tools"
+          "$sdk_tools" verify --print-certs "$apk"
+          "${sdk_tools%/*}/aapt" dump badging "$apk" > apk-metadata.txt
+          grep -F "name='za.co.tsindustries.served'" apk-metadata.txt
+          grep -F "versionName='$APP_VERSION'" apk-metadata.txt
+          rm apk-metadata.txt
+          sha256sum "$apk" > "Served-$APP_VERSION.sha256"
+      - uses: actions/upload-artifact@v4
+        if: steps.version.outputs.publish == 'true'
+        with:
+          name: served-android-apk
+          path: ${{ runner.temp }}/served-release
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: served-android-apk
+          path: release
+      - name: Publish the guest app release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          result="$(curl --silent --show-error --retry 2 --max-time 15 --output /dev/null --write-out '%{http_code}'             https://served-queue.zippybasil1024.chatgpt.site/api/guests/session)"
+          test "$result" = 401 || { echo "::error::The hosted guest account service is unavailable."; exit 1; }
+          gh release create "v$APP_VERSION" "release/Served-$APP_VERSION.apk" "release/Served-$APP_VERSION.sha256" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Served $APP_VERSION · Android guest app" \
+            --notes "Scan a venue QR, join with your guest account, and follow your live ticket. Android APK for direct installation. OTA channel: production. Runtime: 1.0.1."

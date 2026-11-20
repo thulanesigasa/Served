@@ -12,12 +12,15 @@ export function guestDestination(value) {
   throw new Error('This QR code does not contain a live Served guest link.');
 }
 
-export async function request(path, body, signal) {
+export async function request(path, body, signal, token) {
   let response;
   try {
     response = await fetch(origin + '/api/' + path, {
       method: body ? 'POST' : 'GET',
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      headers: {
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: 'Bearer ' + token } : {}),
+      },
       body: body ? JSON.stringify(body) : undefined,
       signal,
     });
@@ -26,7 +29,11 @@ export async function request(path, body, signal) {
     throw new Error('Could not connect. Check your internet connection and try again.');
   }
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error || 'The queue is unavailable. Try again.');
+  if (!response.ok) {
+    const error = new Error(result.error || 'The queue is unavailable. Try again.');
+    error.status = response.status;
+    throw error;
+  }
   return result;
 }
 

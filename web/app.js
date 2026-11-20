@@ -29,6 +29,7 @@ let wakeLock;
 let keepAwake = false;
 let guestJoinId = guest ? (sessionStorage.getItem('served.join') || uuid()) : '';
 let refreshing = false;
+let issuedTicketId = sessionStorage.getItem('served.issued');
 
 function notice(message) {
   toast.textContent = message;
@@ -168,7 +169,7 @@ function renderDashboard() {
         <strong>${hasStaff ? escape(currentVenue.venue.name) : 'Served demo'}</strong><small>${hasStaff ? 'Venue settings' : 'Set up a venue'}</small></span></button>
       <div class="top-actions">
         ${hasStaff ? '<button type="button" class="btn live" id="connection" data-action="venue" aria-label="Venue settings">' + (screen.lastGood ? 'Live' : 'Reconnecting') + '</button>' :
-          actionButton('setup', 'Demo mode', 'demo-pill', 'Demo mode. Set up a venue')}
+          actionButton('setup', 'Demo mode', 'mode-label', 'Demo mode. Set up a venue')}
         <a class="btn view-guest" href="${escape(hasStaff ? guestLink() : link({ guest: 1 }))}" target="_blank" rel="noopener" aria-label="Guest view">${icon('phone', 17)} <span>Guest view</span></a>
       </div>
     </div></header>
@@ -228,10 +229,11 @@ const ordinalSuffix = position => {
   if (lastTwo >= 11 && lastTwo <= 13) return 'th';
   return ({ 1: 'st', 2: 'nd', 3: 'rd' })[position % 10] || 'th';
 };
+const ticketTime = timestamp => new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 function ticketStub(item) {
   return `<div class="ticket-stub">
     <div class="stub-number"><span class="eyebrow">Ticket</span><strong>${ticketNo(item)}</strong></div>
-    <div class="stub-details"><strong>${escape(item.name)}</strong><span>${item.kind === 'table' ? `Table for ${item.size}` : 'Order pickup'}</span></div>
+    <div class="stub-details"><strong>${escape(item.name)}</strong><span>${item.kind === 'table' ? `Table for ${item.size}` : 'Order pickup'}</span><span>Joined at ${escape(ticketTime(item.created_at))}</span></div>
   </div>`;
 }
 function renderGuest(message = '') {
@@ -254,6 +256,11 @@ function renderGuest(message = '') {
     };
     const [title, description] = details[ticket.status];
     cardState = `is-${ticket.status}`;
+    if (issuedTicketId === ticket.id) {
+      cardState += ' ticket-reveal';
+      issuedTicketId = null;
+      sessionStorage.removeItem('served.issued');
+    }
     const status = isWaiting ? 'In the queue' : ticket.status === 'ready' ? 'Called' : label[ticket.status];
     body = `<div class="ticket-topline"><strong>${escape(ticket.venue_name)}</strong><span class="eyebrow">${status}</span></div>
       <div class="ticket-main">
@@ -261,6 +268,7 @@ function renderGuest(message = '') {
           <span class="position-lead">You’re</span><span class="position-number">${position}<sup>${ordinalSuffix(position)}</sup></span><span class="position-tail">in line</span></h1>`
           : `<span class="tile-icon">${icon(ticket.status === 'ready' ? 'bell' : 'check', 26)}</span>
              <h1 id="ticket-state" aria-live="polite">${title}</h1>`}
+        ${isWaiting ? `<p class="wait-estimate">Estimated wait · about ${ticket.estimated_wait_minutes} min</p>` : ''}
         <p>${description}</p>
       </div>${ticketStub(ticket)}
       <div class="ticket-footer">
@@ -285,7 +293,7 @@ function demoTicket(id) {
   const row = queue.find(item => item.id === id);
   if (!row) throw new Error('This demo ticket is only available in the browser where you created it.');
   const position = queue.filter(item => item.number < row.number && item.status === 'waiting' && item.kind === row.kind).length + 1;
-  return { ...row, venue_id: 'demo', venue_name: 'Served demo', position };
+  return { ...row, venue_id: 'demo', venue_name: 'Served demo', position, estimated_wait_minutes: position * (row.kind === 'table' ? 6 : 4) };
 }
 async function refreshGuest(initial = false) {
   const id = params.get('ticket');
@@ -460,6 +468,16 @@ document.addEventListener('submit', async event => {
   event.preventDefault();
   const submit = form.querySelector('button[type="submit"], button:not([type])');
   const error = form.querySelector('.error');
+  const guestForm = form.id === 'guest-form';
+  let building;
+  let started;
+  if (guestForm) {
+    building = document.createElement('div');
+    building.className = 'ticket-build';
+    building.setAttribute('role', 'status');
+    building.innerHTML = `<span>${icon('history', 36)}</span><span>Building your ticket</span>`;
+    started = performance.now();
+  }
   const values = new FormData(form);
   if (submit.disabled) return;
   submit.disabled = true;
@@ -495,9 +513,17 @@ document.addEventListener('submit', async event => {
     const data = { id: fromGuest ? guestJoinId : (form.dataset.joinId ||= uuid()),
       name: values.get('name').trim(), kind: values.get('kind'), size: Number(values.get('size') || 1) };
     if (!data.name) throw new Error('Enter a name or order reference.');
-    if (fromGuest) sessionStorage.setItem('served.join', guestJoinId);
+    if (fromGuest) {
+      sessionStorage.setItem('served.join', guestJoinId);
+      form.hidden = true;
+      form.after(building);
+    }
     const item = useDemo ? addDemo(data) : await request('venues/' + venueId + '/join', { method:'POST', data });
     if (fromGuest) {
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        await new Promise(resolve => setTimeout(resolve, Math.max(0, 650 - (performance.now() - started))));
+      }
+      sessionStorage.setItem('served.issued', item.id);
       sessionStorage.removeItem('served.join');
       if (!demo) write('served.lastTicket', item.id);
       return location.assign(link(demo ? { ticket: item.id, demo: '1' } : { ticket: item.id }));
@@ -508,6 +534,10 @@ document.addEventListener('submit', async event => {
     notice('Ticket added ' + ticketNo(item));
     refresh();
   } catch (problem) {
+    if (building) {
+      building.remove();
+      form.hidden = false;
+    }
     error.textContent = problem.message;
     submit.disabled = false;
   }
