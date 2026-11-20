@@ -47,6 +47,29 @@ async function confirmPayment(env, db, order) {
   return readOrder(db, order.id);
 }
 
+const HOLD_MS = 30 * 60_000;
+const activeOrder = table => `EXISTS (
+  SELECT 1 FROM food_orders o WHERE o.table_id = ${table} AND o.status IN ('paid','preparing','ready')
+)`;
+
+async function reservationHolder(request, db, input) {
+  if (request.headers.has('authorization')) {
+    const session = await guestAuth(new Request(request.url, { headers: request.headers }), db, 'session');
+    return session.status === 200 ? { holder: await digest('guest:' + session.body.guest.id), guest: session.body.guest } : null;
+  }
+  return validId(input.holder) ? { holder: await digest('browser:' + input.holder) } : null;
+}
+
+function holdTable(db, tableId, holder, now = Date.now()) {
+  return db(`INSERT INTO table_reservations (table_id, holder_hash, expires_at)
+    SELECT ?, ?, ? WHERE NOT ${activeOrder('?')}
+    ON CONFLICT(table_id) DO UPDATE SET holder_hash = excluded.holder_hash, expires_at = excluded.expires_at
+    WHERE table_reservations.expires_at <= ? OR table_reservations.holder_hash = excluded.holder_hash
+    RETURNING expires_at`, tableId, holder, now + HOLD_MS, tableId, now).first();
+}
+
+const tableBusy = () => error('This table is already reserved. Choose another available table and scan its QR code.', 409);
+
 async function checkout(request, env, db, table, input) {
   const { id, quantities } = input;
   if (!validId(id) || !quantities || typeof quantities !== 'object' || Array.isArray(quantities)) {
@@ -55,12 +78,9 @@ async function checkout(request, env, db, table, input) {
   const key = merchant(env, table.venue_id);
   if (!key) return error('Online payment is not available at this restaurant yet.', 503);
 
-  let account = null;
-  if (request.headers.has('authorization')) {
-    const session = await guestAuth(new Request(request.url, { headers: request.headers }), db, 'session');
-    if (session.status !== 200) return error('Sign in again to place this order.', 401);
-    account = session.body.guest;
-  }
+  const identity = await reservationHolder(request, db, input);
+  if (!identity) return error('Reopen the table menu or sign in again to place this order.', 401);
+  const account = identity.guest;
   const guestName = account?.name || clean(input.name);
   const email = account?.email || clean(input.email).toLowerCase();
   if (!guestName || guestName.length > 45 || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -81,6 +101,7 @@ async function checkout(request, env, db, table, input) {
     const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     if (input.expected_total !== total) return error('The menu price changed. Refresh the menu before paying.', 409);
     const now = Date.now();
+    if (!await holdTable(db, table.id, identity.holder, now)) return tableBusy();
     await db(`INSERT INTO food_orders (id, venue_id, table_id, guest_id, guest_name, email, items, total, status, created_at, updated_at)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?) ON CONFLICT(id) DO NOTHING`,
       id, table.venue_id, table.id, account?.id ?? null, guestName, email, JSON.stringify(items), total, now, now).run();
@@ -165,7 +186,29 @@ export async function ordering(request, env, db, section, id, action, data) {
     if (!table) return error('Table unavailable. Ask staff for a table QR code.', 404);
     if (!action && method === 'GET') {
       const { results } = await db('SELECT id, name, description, price FROM menu_items WHERE venue_id = ? AND available = 1 ORDER BY name', table.venue_id).all();
-      return out({ ...table, items: results, payment_available: Boolean(merchant(env, table.venue_id)) });
+      const now = Date.now();
+      const { results: alternatives } = await db(`SELECT t.label FROM dining_tables t
+        WHERE t.venue_id = ? AND t.id <> ? AND NOT ${activeOrder('t.id')}
+        AND NOT EXISTS (SELECT 1 FROM table_reservations r WHERE r.table_id = t.id AND r.expires_at > ?)
+        ORDER BY t.label LIMIT 12`, table.venue_id, id, now).all();
+      return out({ ...table, items: results, alternatives: alternatives.map(row => row.label), payment_available: Boolean(merchant(env, table.venue_id)) });
+    }
+    if (action === 'reservation' && method === 'POST') {
+      const identity = await reservationHolder(request, db, data);
+      if (!identity) return error('Reopen the table menu or sign in again to reserve.', 401);
+      if (data.release === true) {
+        await db('DELETE FROM table_reservations WHERE table_id = ? AND holder_hash = ?', id, identity.holder).run();
+        return out({ ok:true });
+      }
+      if (data.check === true) {
+        const now = Date.now();
+        const reservation = await db('SELECT holder_hash, expires_at FROM table_reservations WHERE table_id = ? AND expires_at > ?', id, now).first();
+        const occupied = await db(`SELECT ${activeOrder('?')} AS occupied`, id).first();
+        const own = reservation?.holder_hash === identity.holder;
+        return out({ busy: Boolean(occupied.occupied || (reservation && !own)), expires_at: own ? reservation.expires_at : null });
+      }
+      const reservation = await holdTable(db, id, identity.holder);
+      return reservation ? out(reservation, 201) : tableBusy();
     }
     if (action === 'visit' && method === 'POST') {
       const session = await guestAuth(new Request(request.url, { headers:request.headers }), db, 'session');
@@ -197,7 +240,9 @@ export async function ordering(request, env, db, section, id, action, data) {
   if (!venue || !staff || await digest(staff) !== venue.staff_hash) return error('Staff access is required.', 401);
   if (!action && method === 'GET') {
     const [tables, menu, orders] = await Promise.all([
-      db('SELECT id, label FROM dining_tables WHERE venue_id = ? ORDER BY label', id).all(),
+      db(`SELECT t.id, t.label, (${activeOrder('t.id')} OR EXISTS (
+        SELECT 1 FROM table_reservations r WHERE r.table_id = t.id AND r.expires_at > ?
+      )) AS occupied FROM dining_tables t WHERE t.venue_id = ? ORDER BY t.label`, Date.now(), id).all(),
       db('SELECT id, name, description, price, available FROM menu_items WHERE venue_id = ? ORDER BY name', id).all(),
       db(`SELECT o.*, t.label AS table_label FROM food_orders o JOIN dining_tables t ON t.id = o.table_id
           WHERE o.venue_id = ? AND o.status <> 'pending' AND (o.status <> 'delivered' OR o.updated_at >= ?)

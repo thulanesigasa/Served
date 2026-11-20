@@ -78,3 +78,39 @@ test('table checkout verifies the payment before exposing an order to staff', as
   assert.equal((await send(staff + '/order', 'PATCH', { id, status:'delivered' }, staffToken))[0], 200);
   assert.equal((await send('orders', 'GET', undefined, account.token))[1][0].status, 'delivered');
 });
+
+test('a shared table QR has only one active reservation across guests', async t => {
+  const DB = localDb();
+  t.after(() => DB.close());
+  async function send(path, body, token) {
+    const response = await api(new Request('https://served.example/api/' + path, {
+      method: body ? 'POST' : 'GET',
+      headers: { 'Content-Type':'application/json', ...(token ? { Authorization:'Bearer ' + token } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    }), { DB });
+    return { status:response.status, body:await response.json() };
+  }
+  const { body:{ venue, staffToken } } = await send('venues', { name:'Demo cafe' });
+  const staff = 'ordering/' + venue.id;
+  const { body:table } = await send(staff + '/table', { label:'Table 2' }, staffToken);
+  const { body:other } = await send(staff + '/table', { label:'Table 3' }, staffToken);
+  const menu = 'menus/' + table.id;
+  const reservation = menu + '/reservation';
+  const guests = [1, 2].map(() => ({ holder:randomUUID().replaceAll('-', '') }));
+  assert.equal((await send(reservation, {})).status, 401);
+  const attempts = await Promise.all(guests.map(guest => send(reservation, guest)));
+  assert.deepEqual(attempts.map(attempt => attempt.status).sort(), [201, 409]);
+  const winner = attempts.findIndex(attempt => attempt.status === 201);
+  const losingGuest = guests[1 - winner];
+  assert.equal((await send(reservation, { ...losingGuest, check:true })).body.busy, true);
+  assert.equal((await send(reservation, { ...guests[winner], check:true })).body.busy, false);
+  assert.deepEqual((await send(menu)).body.alternatives, ['Table 3']);
+  assert.equal((await send('menus/' + other.id + '/reservation', losingGuest)).status, 201);
+  assert.equal((await send(staff, null, staffToken)).body.tables.every(row => row.occupied), true);
+  await send(reservation, { ...losingGuest, release:true });
+  assert.equal((await send(reservation, losingGuest)).status, 409);
+  await send(reservation, { ...guests[winner], release:true });
+  assert.equal((await send(reservation, losingGuest)).status, 201);
+  await DB.prepare('UPDATE table_reservations SET expires_at = ? WHERE table_id = ?').bind(Date.now() - 1, table.id).run();
+  assert.equal((await send(reservation, guests[winner])).status, 201);
+});

@@ -1,5 +1,6 @@
 import QRCode from 'qrcode';
 import { icon } from './icons.js';
+import { demoItems, demoMenu } from './demo-menu.js';
 
 const statuses = {
   pending: ['Awaiting payment', 'Your order will go to the kitchen once payment is confirmed.'],
@@ -62,6 +63,21 @@ export function guestOrdering(app, params) {
   let audio;
   let refreshTicket = false;
   let menuRequest = 0;
+  let demoOnly = params.has('demo-menu');
+  let category = 'All';
+  let cartOpen = false;
+  let placed = null;
+  const demoMode = () => demoOnly || (table && !table.items.length);
+  const selection = () => demoMode() ? demoItems : (table?.items || []);
+  const holder = () => {
+    let id = localStorage.getItem('served.tableHolder');
+    if (!validId(id)) {
+      id = crypto.randomUUID().replaceAll('-', '');
+      localStorage.setItem('served.tableHolder', id);
+    }
+    return id;
+  };
+  const reservationCall = (id, data) => api('menus/' + id + '/reservation', token(), 'POST', { holder:holder(), ...data });
   const sessionKey = key => 'served.' + key + (native ? '.' + (session?.guest.id || 'native') : '');
   const saved = key => {
     try { return JSON.parse(localStorage.getItem(sessionKey(key)) || '[]'); }
@@ -70,7 +86,7 @@ export function guestOrdering(app, params) {
   const store = (key, values) => localStorage.setItem(sessionKey(key), JSON.stringify(values.slice(0, 100)));
   const send = (action, value) => window.ReactNativeWebView?.postMessage(JSON.stringify({ action, value }));
   const token = () => session?.token;
-  const total = () => table?.items.reduce((sum, item) => sum + item.price * (quantities[item.id] || 0), 0) || 0;
+  const total = () => selection().reduce((sum, item) => sum + item.price * (quantities[item.id] || 0), 0);
   const count = () => Object.values(quantities).reduce((sum, value) => sum + value, 0);
 
   function ring() {
@@ -91,10 +107,25 @@ export function guestOrdering(app, params) {
     store('foodOrders', orders);
   }
 
+  function reservationCard() {
+    if (!table) return '';
+    const reserved = table.reservation?.expires_at > Date.now();
+    const alternatives = table.alternatives?.length ? ' Available when checked: ' + table.alternatives.join(', ') + '.' : '';
+    return `<section class="table-hold" aria-label="Table reservation">
+      <strong>${esc(table.label)}</strong>
+      ${table.reservation?.busy ? `<p role="status">This table is already reserved. Choose another table and scan its QR code.${esc(alternatives)}</p>`
+        : reserved ? '<p>Reserved for you until ' + new Date(table.reservation.expires_at).toLocaleTimeString('en-ZA', { hour:'2-digit', minute:'2-digit' }) + '.</p>' : '<p>Hold this table for 30 minutes.</p>'}
+      ${reserved && !table.reservation?.busy ? button('release-table', 'Release table') : ''}
+      ${!reserved ? button('reserve-table', table.reservation?.busy ? 'Check again' : 'Reserve table', 'primary') : ''}
+      ${native && table.reservation?.busy ? button('scan', 'Scan another table') : ''}
+    </section>`;
+  }
+
   function menuCard() {
     return `<section class="order-paper">
       <p class="eyebrow">${esc(table.label)}</p>
       <h1>${esc(table.venue_name)}</h1>
+      ${reservationCard()}
       <h2>Menu</h2>
       ${table.items.length ? `<ul class="menu-list">${table.items.map(item => {
         const quantity = quantities[item.id] || 0;
@@ -111,7 +142,7 @@ export function guestOrdering(app, params) {
         <p class="order-total"><strong>${count()} items</strong><strong>${money(total())}</strong></p>
         ${native ? '' : `<label>Name <input name="name" value="${esc(savedName)}" required maxlength="45" autocomplete="name"></label>
           <label>Email for payment <input name="email" value="${esc(savedEmail)}" required type="email" maxlength="254" autocomplete="email"></label>`}
-        <button class="btn primary" ${loading || !table.payment_available ? 'disabled' : ''}>${loading ? 'Opening checkout…' : 'Pay ' + money(total())}</button>
+        <button class="btn primary" ${loading || table.reservation?.busy || !table.payment_available ? 'disabled' : ''}>${loading ? 'Opening checkout…' : 'Pay ' + money(total())}</button>
       </form>` : ''}
       ${!native ? `<p><a href="served://open?url=${encodeURIComponent(location.origin + url({ table:table.id }))}">Open menu in Served app</a></p>` : ''}
       ${!table.payment_available ? '<p role="status">Online payment is not available at this restaurant yet.</p>' : ''}
@@ -141,6 +172,7 @@ export function guestOrdering(app, params) {
       ${native ? button('scan', icon('qr', 18) + ' Scan table QR', 'primary') : ''}
       <form id="order-link"><label>Table link<input type="url" name="link" required placeholder="Paste the restaurant’s table link"></label>
       <button class="btn ${native ? '' : 'primary'}">Open menu</button></form>
+      ${button('demo-menu', 'Try the demo menu')}
       ${saved('foodOrders').length ? button('open-order', 'Resume last order', '', saved('foodOrders')[0]) : ''}
     </section>`;
   }
@@ -157,8 +189,11 @@ export function guestOrdering(app, params) {
         ${session ? `<h2>Account</h2><p>${esc(session.guest.name)}<br>${esc(session.guest.email)}</p>` : ''}
         <h2>Order alerts</h2><label class="settings-check"><input type="checkbox" id="order-sound" ${sound ? 'checked' : ''}> Play an alert when the waiter is on the way</label>
         ${native ? button('signout', 'Sign out') : ''}</section>`
-      : order ? ticket() : table ? menuCard() : landing();
-    app.innerHTML = `<main class="guest order-app">
+      : order ? ticket() : demoMode() ? demoMenu({
+        reservation:reservationCard(), title:table?.venue_name || 'Served Kitchen', category, quantities,
+        count:count(), total:total(), cartOpen, placed, button, esc, money, listItems,
+      }) : table ? menuCard() : landing();
+    app.innerHTML = `<main class="guest order-app${screen === 'feed' && !order && demoMode() ? ' demo-app' : ''}">
       <header class="order-header"><a href="${url({ shell:'guest', ...(native ? { native:'1' } : {}) })}" aria-label="Served home"><img src="/served-logo.png" alt="Served" width="88" height="36"></a></header>
       <div class="order-content">${issue ? `<p class="order-error" role="status">${esc(issue)}</p>` : ''}${content}</div>
       <nav class="order-tabs" aria-label="Guest navigation">${tabs.map(([key, glyph, title]) =>
@@ -172,7 +207,13 @@ export function guestOrdering(app, params) {
     const attempt = ++menuRequest;
     const menu = await api('menus/' + id);
     if (attempt !== menuRequest) return;
-    table = menu;
+    const reservation = await reservationCall(id, { check:true });
+    if (attempt !== menuRequest) return;
+    demoOnly = false;
+    table = { ...menu, reservation };
+    placed = null;
+    cartOpen = false;
+    category = 'All';
     tableId = menu.id;
     order = null;
     orderId = null;
@@ -226,6 +267,7 @@ export function guestOrdering(app, params) {
       issue = '';
       if (validId(orderId)) await showOrder(orderId, params.get('payment') === 'return');
       else if (validId(tableId)) await fetchMenu(tableId);
+      else if (demoOnly) render();
       else {
         const history = native ? await api('orders', token()) : [];
         const last = native ? history.find(candidate => candidate.status !== 'delivered')?.id || history[0]?.id : saved('foodOrders')[0];
@@ -253,6 +295,56 @@ export function guestOrdering(app, params) {
         }
         if (value === 'shops' && native) accountShops = await api('orders/shops', token());
         render(control.dataset);
+      } else if (action === 'demo-menu') {
+        ++menuRequest;
+        order = table = orderId = tableId = checkoutId = null;
+        demoOnly = true;
+        screen = 'feed';
+        category = 'All';
+        quantities = {};
+        placed = null;
+        cartOpen = false;
+        render();
+      } else if (action === 'reserve-table' || action === 'release-table') {
+        const current = table;
+        const prior = current.reservation;
+        control.disabled = true;
+        try {
+          if (action === 'release-table') {
+            await reservationCall(current.id, { release:true });
+            current.reservation = { busy:false };
+          } else {
+            current.reservation = await reservationCall(current.id, {});
+          }
+        } catch (failure) {
+          current.reservation = await reservationCall(current.id, { check:true }).catch(() => prior);
+          if (current.reservation?.busy) {
+            const fresh = await api('menus/' + current.id).catch(() => null);
+            if (fresh) current.alternatives = fresh.alternatives;
+          }
+          throw failure;
+        }
+        render(control.dataset);
+      } else if (action === 'demo-category') {
+        category = value;
+        render(control.dataset);
+      } else if (action === 'demo-cart') {
+        cartOpen = !cartOpen;
+        render(control.dataset);
+        if (cartOpen) app.querySelector('#demo-cart')?.scrollIntoView({ block:'nearest' });
+      } else if (action === 'demo-place' && count()) {
+        placed = {
+          number:crypto.randomUUID().slice(0, 5).toUpperCase(),
+          items:selection().filter(item => quantities[item.id]).map(item => ({ ...item, quantity:quantities[item.id] })),
+          total:total(),
+        };
+        quantities = {};
+        cartOpen = false;
+        render();
+        window.scrollTo(0, 0);
+      } else if (action === 'demo-return') {
+        placed = null;
+        render();
       } else if (action === 'plus' || action === 'minus') {
         const form = app.querySelector('#order-checkout');
         if (form?.elements.name) savedName = form.elements.name.value;
@@ -280,6 +372,8 @@ export function guestOrdering(app, params) {
         ++menuRequest;
         order = table = orderId = tableId = checkoutId = null;
         quantities = {};
+        demoOnly = false;
+        placed = null;
         history.replaceState(null, '', url({ shell:'guest', ...(native ? { native:'1' } : {}) }));
         render();
         if (native) send('scan');
@@ -314,7 +408,7 @@ export function guestOrdering(app, params) {
         render();
         checkoutId ||= crypto.randomUUID().replaceAll('-', '');
         const candidate = await api('menus/' + table.id + '/checkout', token(), 'POST', {
-          id: checkoutId, name: savedName, email: savedEmail, quantities, expected_total: total(),
+          id: checkoutId, holder:holder(), name: savedName, email: savedEmail, quantities, expected_total: total(),
         });
         order = candidate;
         orderId = order.id;
@@ -366,6 +460,7 @@ export function staffOrdering(app, venueConfig, { notice, modal }) {
 
   function menu() {
     return `<form id="staff-menu" class="staff-order-form">
+      <a href="/?demo-menu=1" target="_blank" rel="noopener">Preview guest demo menu</a>
       <h2>${editing ? 'Edit menu item' : 'Add menu item'}</h2>
       <label>Name <input name="name" maxlength="80" required value="${esc(editing?.name)}"></label>
       <label>Description <input maxlength="160" name="description" value="${esc(editing?.description)}"></label>
@@ -380,7 +475,7 @@ export function staffOrdering(app, venueConfig, { notice, modal }) {
     return `<form id="staff-table" class="staff-order-form"><h2>Add a table</h2>
       <label>Table label <input name="label" maxlength="32" required placeholder="Table 5"></label>
       <button class="btn primary">Create table QR</button></form>
-      <div>${state.tables.map(table => `<div class="order-line"><strong>${esc(table.label)}</strong>
+      <div>${state.tables.map(table => `<div class="order-line"><div><strong>${esc(table.label)}</strong><p data-table-status="${table.id}">${table.occupied ? 'Occupied' : 'Available'}</p></div>
         ${button('staff-qr', 'View QR', '', table.id)}<a class="btn" href="${url({ table:table.id })}" target="_blank" rel="noopener">Open menu</a></div>`).join('')}</div>`;
   }
 
@@ -410,6 +505,12 @@ export function staffOrdering(app, venueConfig, { notice, modal }) {
       if (changed || problem) {
         problem = '';
         if (view === 'queue' || !app.querySelector('#staff-ordering form')) render();
+        else if (view === 'tables') {
+          for (const table of state.tables) {
+            const status = app.querySelector(`[data-table-status="${table.id}"]`);
+            if (status) status.textContent = table.occupied ? 'Occupied' : 'Available';
+          }
+        }
       }
     } catch (failure) {
       if (!state) {

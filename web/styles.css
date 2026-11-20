@@ -556,3 +556,116 @@ dialog::backdrop { background: #1a101dc4; }
 .kitchen-ticket p { margin-top: 5px; }
 .kitchen-ticket .btn { margin-top: 8px; }
 @media (max-width: 450px) { .nav-inner { flex-wrap: wrap; justify-content: flex-start; } }
+
+.table-hold {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 13px 0;
+  margin-block: 12px;
+  border-block: 1px solid currentColor;
+}
+.table-hold p { margin: 0; flex: 1 1 180px; }
+.table-hold .btn { min-height: 42px; }
+
+.demo-app { max-width: 760px; }
+.demo-app .order-content { color: #fff1e9; }
+.demo-menu, .demo-receipt {
+  border: 1px solid #67495e;
+  padding: clamp(16px, 4vw, 30px);
+  background: radial-gradient(ellipse at 80% 0, #583242 0, transparent 54%), #211621;
+  border-radius: 23px;
+}
+.demo-intro h1, .demo-receipt h1 {
+  color: #fff1e9;
+  margin: 3px 0;
+  font-size: clamp(2.6rem, 10vw, 4.7rem);
+  overflow-wrap: anywhere;
+}
+.demo-intro > p:last-child, .demo-receipt > p:not(.demo-kicker):not(.demo-ticket-number) {
+  color: #e5cdd5;
+}
+.demo-kicker { color: #f4bfc4; font-size: .81rem; letter-spacing: .11em; text-transform: uppercase; font-weight: 700; }
+.demo-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 17px;
+  border-bottom: 1px solid #6b4b5f;
+  margin: 20px 0 17px;
+}
+.demo-category {
+  color: #e5cdd5;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 11px 2px;
+  min-height: 44px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.demo-category[aria-pressed="true"] { color: #f4bfc4; border-bottom-color: #f4bfc4; }
+.demo-featured {
+  position: relative;
+  isolation: isolate;
+  min-height: clamp(265px, 60vw, 340px);
+  display: grid;
+  align-items: end;
+  overflow: hidden;
+  background: #2e1d2b;
+  border: 1px solid #6b4b5f;
+  border-radius: 16px;
+}
+.demo-featured img {
+  position: absolute;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 58%;
+}
+.demo-featured::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: '';
+  background: linear-gradient(0deg, #20121d 4%, #20121de8 27%, transparent 75%);
+}
+.demo-featured-copy { padding: 16px; }
+.demo-featured h2, .demo-section-title, .demo-cart h2 { margin: 4px 0; color: #fff1e9; }
+.demo-featured p:not(.demo-kicker) { margin: 4px 0 13px; color: #f6e6e9; }
+.demo-section-title { margin: 19px 0 10px; }
+.demo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(8px, 2.5vw, 18px); }
+.demo-dish {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: #3c293a;
+  border: 1px solid #6b4b5f;
+  border-radius: 13px;
+}
+.demo-dish img { display: block; width: 100%; height: auto; aspect-ratio: 1.25; object-fit: cover; }
+.demo-dish-copy { display: flex; flex: 1; flex-direction: column; gap: 5px; padding: 10px; }
+.demo-dish h3 { color: #fff1e9; margin: 0; overflow-wrap: anywhere; font-size: 1rem; }
+.demo-dish p { color: #e5cdd5; font-size: .82rem; line-height: 1.35; margin: 0; }
+.demo-dish-footer { margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 4px; }
+.demo-dish-footer > strong { color: #f4bfc4; }
+.demo-quantity { display: flex; align-items: center; gap: 1px; }
+.demo-app .demo-quantity .btn {
+  padding: 0;
+  min-height: 44px;
+  min-width: 34px;
+  border: 0;
+  background: transparent;
+  color: #f4bfc4;
+  font-size: 1.45rem;
+}
+.demo-cart { padding-top: 16px; }
+.demo-app .btn.demo-cta { background: #f4bfc4; color: #291a28; border: 1px solid #f4bfc4; }
+.demo-app .btn.demo-secondary { color: #fff1e9; background: transparent; margin-top: 7px; }
+.demo-app .table-hold .btn { color: #fff1e9; border-color: #b9889d; }
+.demo-app .table-hold .btn.primary { background: #f4bfc4; color: #291a28; }
+.demo-receipt .demo-ticket-number { color: #f4bfc4; border-block: 1px dashed #b9889d; padding: 12px 0; }
+.demo-receipt .food-list li, .demo-cart .food-list li { border-color: #937086; }

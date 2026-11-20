@@ -8,6 +8,8 @@ const mime = {
   '/barlow-condensed-800.woff2': 'font/woff2',
   '/LICENSE-Barlow-Condensed.txt': 'text/plain; charset=utf-8',
   '/manifest.webmanifest': 'application/manifest+json; charset=utf-8',
+  '/demo/burger.webp': 'image/webp', '/demo/chicken.webp': 'image/webp',
+  '/demo/pizza.webp': 'image/webp', '/demo/lemonade.webp': 'image/webp',
   '/served-logo.png': 'image/png',
   '/icon-192.png': 'image/png', '/icon-512.png': 'image/png',
 };

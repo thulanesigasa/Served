@@ -21,7 +21,7 @@ const link = query => location.origin + '/' + (query ? '?' + new URLSearchParams
 const currentVenue = read('served.staff');
 const guestLanding = params.has('guest') || (params.has('launch') && !currentVenue);
 const hasStaff = Boolean(currentVenue);
-const orderGuest = params.has('shell') || params.has('table') || params.has('order') || (guestLanding && !guest);
+const orderGuest = params.has('demo-menu') || params.has('shell') || params.has('table') || params.has('order') || (guestLanding && !guest);
 let orderingDashboard;
 let installPrompt;
 let toastTimer;
@@ -162,7 +162,8 @@ function renderDashboard() {
   const [title, subtitle] = titles[screen.tab];
   const contents = {
     ordering: () => hasStaff ? '<section class="surface" id="staff-ordering"></section>'
-      : `<section class="surface setup"><h2>Set up your restaurant</h2><p>Add a menu and create a QR code for each table.</p>${actionButton('setup', 'Set up a restaurant', 'primary')}</section>`,
+      : `<section class="surface setup"><h2>Set up your restaurant</h2><p>Add a menu and create a QR code for each table.</p>${actionButton('setup', 'Set up a restaurant', 'primary')}
+        <a class="btn" href="/?demo-menu=1">Preview demo menu</a></section>`,
     queue: () => stats() + queuePanel(false), qr: qrPanel, history: () => queuePanel(true),
     install: () => `<section class="surface setup"><h2>Add Served to your home screen</h2>
     <p><strong>Android:</strong> Open Served in Chrome and choose Install app or Add to Home screen from the menu.</p>
@@ -297,6 +298,7 @@ function renderGuest(message = '') {
     body = '<div class="ticket-main"><h1>Opening your queue</h1><p role="status">Connecting to Served…</p></div>';
   }
   app.innerHTML = `<main class="guest">${header}<section class="surface guest-card ${cardState}">${body}</section>
+    <p class="info">Here to order? Scan the QR at your table or <a href="/?demo-menu=1">try the demo menu</a>.</p>
     ${demo ? '<p class="info">Demo tickets sync between tabs in this browser.</p>' : ''}</main>`;
 }
 function demoTicket(id) {
