@@ -42,13 +42,20 @@ test('confirmed demo ticket survives refresh and is available in History', async
   const first = openPage();
   await first.click('plus', 'burger');
   await first.click('demo-cart');
+  assert.match(first.app.innerHTML, /Review your order/);
   await first.click('demo-payment');
+  assert.match(first.app.innerHTML, /Demo card payment/);
   assert.doesNotMatch(first.app.innerHTML, /Ticket #[A-F0-9]+/);
   await first.click('demo-place');
   const [ticket] = JSON.parse(storage.get('served.demoOrders'));
   const ticketNumber = new RegExp('Ticket #' + ticket.number);
   assert.match(first.app.innerHTML, ticketNumber);
   assert.equal(location.searchParams.get('demo-ticket'), ticket.id);
+  assert.match(first.app.innerHTML, /Order complete/);
+  await first.click('demo-view-ticket');
+  assert.match(first.app.innerHTML, ticketNumber);
+  assert.match(first.app.innerHTML, /Estimated wait · about 12 min/);
+  assert.match(first.app.innerHTML, /ticket-stub/);
 
   const refreshed = openPage();
   assert.match(refreshed.app.innerHTML, ticketNumber);

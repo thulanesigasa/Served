@@ -5,6 +5,7 @@ import { demoItems, menuCategories } from './menu-catalog.js';
 
 export const demoMenuCode = 'c98f5fc36be3439eba270a18abbbf2ac';
 
+const demoWaitMinutes = 12;
 const statuses = {
   pending: ['Awaiting payment', 'Your order will go to the kitchen once payment is confirmed.'],
   paid: ['Order placed', 'The kitchen has received your order.'],
@@ -77,6 +78,7 @@ export function guestOrdering(app, params) {
   let category = 'All';
   let cartOpen = false;
   let placed = null;
+  let paymentConfirmed = false;
   let demoPayment = false;
   const demoMode = () => demoOnly || Boolean(table && (!table.items.length || !table.payment_available));
   const selection = () => table?.items.length ? table.items : demoMode() ? demoItems : [];
@@ -172,9 +174,10 @@ export function guestOrdering(app, params) {
       </section>`;
   }
 
-  function showDemoTicket(receipt, updateLink = true) {
+  function showDemoTicket(receipt, updateLink = true, justPaid = false) {
     ++menuRequest;
     placed = receipt;
+    paymentConfirmed = justPaid;
     order = orderId = null;
     screen = 'feed';
     cartOpen = demoPayment = false;
@@ -192,14 +195,32 @@ export function guestOrdering(app, params) {
   }
 
   function demoTicket() {
-    return `<section class="demo-receipt">
-      <p class="demo-kicker">Demo ticket</p>
-      <h1 class="demo-ticket-number" tabindex="-1">Ticket ${esc(orderNumber(placed.number))}</h1>
-      <p role="status">Order complete. No charge was made.</p>
-      <p>${esc(placed.venue_name)}</p>
-      ${listItems(placed.items)}
-      <p class="order-total"><strong>Demo total</strong><strong>${money(placed.total)}</strong></p>
-      ${button('demo-return', 'Back to menu', 'demo-cta')}
+    const number = esc(orderNumber(placed.number));
+    if (paymentConfirmed) return `<section class="demo-checkout checkout-confirmation">
+      <span class="checkout-check">${icon('check', 30)}</span>
+      <h1>Order complete</h1>
+      <p role="status">Demo payment confirmed. No charge was made.</p>
+      <p class="checkout-confirmed-number">Ticket ${number}</p>
+      ${button('demo-view-ticket', 'Back to menu', 'checkout-primary')}
+      <p class="checkout-note">Your ticket and estimated wait are next.</p>
+    </section>`;
+    const orderedAt = new Date(placed.created_at).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
+    return `<section class="surface guest-card is-waiting demo-wait-ticket">
+      <div class="ticket-topline"><strong>${esc(placed.venue_name)}</strong><span class="eyebrow">Demo queue</span></div>
+      <div class="ticket-main">
+        <h1 class="demo-ticket-number" tabindex="-1">Ticket ${number}</h1>
+        <p class="wait-estimate">Estimated wait · about ${esc(placed.estimated_wait_minutes ?? demoWaitMinutes)} min</p>
+        <p>Demo wait from the time you placed your order.</p>
+      </div>
+      <div class="ticket-stub">
+        <div class="stub-number"><span class="eyebrow">Ticket</span><strong>${number}</strong></div>
+        <div class="stub-details"><strong>${esc(placed.table_label || 'Food order')}</strong><span>Ordered at ${esc(orderedAt)}</span></div>
+      </div>
+      <div class="ticket-footer">
+        ${listItems(placed.items)}
+        <p class="order-total"><strong>Demo total</strong><strong>${money(placed.total)}</strong></p>
+        ${button('demo-return', 'Open menu', 'primary')}
+      </div>
     </section>`;
   }
 
@@ -267,7 +288,7 @@ export function guestOrdering(app, params) {
       : placed ? demoTicket() : order ? ticket() : demoMode() ? demoMenu({
         items:selection(), reservation:reservationCard(), title:table?.venue_name || 'Served Kitchen',
         category, payment:demoPayment, quantities,
-        count:count(), total:total(), cartOpen, button, esc, money, listItems,
+        count:count(), total:total(), cartOpen, button, esc, money,
       }) : table ? menuCard() : landing();
     app.innerHTML = `<main class="guest order-app${screen === 'feed' && !order && (placed || demoMode()) ? ' demo-app' : ''}">
       <header class="order-header"><a href="${url({ shell:'guest', ...(native ? { native:'1' } : {}) })}" aria-label="Served home"><img src="/served-logo.png" alt="Served" width="88" height="36"></a></header>
@@ -430,6 +451,7 @@ export function guestOrdering(app, params) {
       } else if (action === 'demo-payment' && cartOpen && count()) {
         demoPayment = !demoPayment;
         render();
+        window.scrollTo(0, 0);
       } else if (action === 'demo-place' && demoMode() && demoPayment && count()) {
         const id = crypto.randomUUID();
         const receipt = {
@@ -438,6 +460,8 @@ export function guestOrdering(app, params) {
           menu_id:tableId || demoMenuCode,
           venue_name:table?.venue_name || 'Served Kitchen',
           created_at:Date.now(),
+          estimated_wait_minutes:demoWaitMinutes,
+          table_label:table?.label,
           items:selection().filter(item => quantities[item.id]).map(item => ({ ...item, quantity:quantities[item.id] })),
           total:total(),
         };
@@ -447,8 +471,12 @@ export function guestOrdering(app, params) {
         } catch {
           issue = 'This device couldn’t save your ticket to History.';
         }
-        showDemoTicket(receipt);
+        showDemoTicket(receipt, true, true);
+      } else if (action === 'demo-view-ticket' && placed) {
+        paymentConfirmed = false;
+        render();
         app.querySelector('.demo-ticket-number')?.focus({ preventScroll:true });
+        window.scrollTo(0, 0);
       } else if (action === 'open-demo-ticket') {
         const receipt = saved('demoOrders').find(entry => entry.id === value);
         if (receipt) showDemoTicket(receipt);
@@ -465,6 +493,7 @@ export function guestOrdering(app, params) {
         const amount = Math.min(20, Math.max(0, (quantities[value] || 0) + (action === 'plus' ? 1 : -1)));
         if (amount) quantities[value] = amount;
         else delete quantities[value];
+        if (cartOpen && !count()) cartOpen = demoPayment = false;
         checkoutId = null;
         render(control.dataset);
       } else if (action === 'open-order') await showOrder(value);

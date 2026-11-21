@@ -9,6 +9,7 @@ const paths = {
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-4"/><circle cx="9" cy="7" r="4"/><path d="M17 3a4 4 0 0 1 0 8"/>',
   check: '<path d="m5 12 4 4L19 6"/>',
   table: '<path d="M3 8h18M6 8l-2 12m14-12 2 12M8 8V5h8v3"/>',
+  card: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/>',
   bag: '<path d="M4 7h16l1 14H3L4 7Zm5 2V6a3 3 0 0 1 6 0v3"/>',
   close: '<path d="m6 6 12 12M18 6 6 18"/>',
   link: '<path d="M10 14l4-4m-5 7-2 2a4 4 0 1 1-6-6l4-4a4 4 0 0 1 6 0m2-2 2-2a4 4 0 1 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(1 0)"/>',
