@@ -1,4 +1,5 @@
 import { digest, guestAuth } from './guests.js';
+import { demoItems } from '../web/menu-catalog.js';
 
 const uuid = () => crypto.randomUUID().replaceAll('-', '');
 const validId = value => /^[a-f0-9]{32}$/.test(value ?? '');
@@ -168,6 +169,46 @@ function menuItems(db, venueId) {
   return db('SELECT id, name, description, price, category FROM menu_items WHERE venue_id = ? AND available = 1 ORDER BY name', venueId).all();
 }
 
+const demoOrderQuery = `SELECT d.*, v.name AS venue_name, COALESCE(t.label, 'Restaurant QR') AS table_label
+  FROM demo_food_orders d JOIN venues v ON v.id = d.venue_id LEFT JOIN dining_tables t ON t.id = d.table_id`;
+
+function demoOrderView(order) {
+  return { ...orderView(order), number:order.id.slice(0, 5).toUpperCase(), demo:true };
+}
+
+async function demoCheckout(env, db, menuId, table, { id, quantities, expected_total }) {
+  const lines = quantities && typeof quantities === 'object' && !Array.isArray(quantities) ? Object.entries(quantities) : [];
+  if (!validId(id) || !lines.length || lines.length > 40 ||
+      lines.some(([, count]) => !Number.isInteger(count) || count < 1 || count > 20)) {
+    return error('Choose valid quantities before checking out.', 400);
+  }
+  const venueId = table?.venue_id || menuId;
+  const venue = await db('SELECT id FROM venues WHERE id = ?', venueId).first();
+  if (!venue) return error('This restaurant menu is unavailable.', 404);
+  const lookup = () => db(demoOrderQuery + ' WHERE d.id = ? AND d.venue_id = ? AND d.table_id IS ?', id, venueId, table?.id ?? null).first();
+  const existing = await lookup();
+  if (existing) return out(demoOrderView(existing));
+
+  const { results } = await menuItems(db, venueId);
+  if (results.length && merchant(env, venueId)) {
+    return error('Demo checkout is unavailable for this menu.', 409);
+  }
+  const catalog = new Map((results.length ? results : demoItems).map(item => [item.id, item]));
+  if (lines.some(([item]) => !catalog.has(item))) return error('An item is no longer available. Reopen the menu.', 409);
+  const items = lines.map(([id, quantity]) => {
+    const { name, price } = catalog.get(id);
+    return { id, name, price, quantity };
+  });
+  const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  if (expected_total !== total) return error('The menu price changed. Reopen the menu.', 409);
+  const now = Date.now();
+  await db(`INSERT INTO demo_food_orders (id, venue_id, table_id, items, total, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'placed', ?, ?) ON CONFLICT(id) DO NOTHING`,
+  id, venueId, table?.id ?? null, JSON.stringify(items), total, now, now).run();
+  const order = await lookup();
+  return order ? out(demoOrderView(order), 201) : error('This ticket is unavailable.', 409);
+}
+
 export async function ordering(request, env, db, section, id, action, data) {
   const method = request.method;
   if (section === 'paystack' && id === 'webhook' && !action && method === 'POST') return webhook(request, env, db);
@@ -187,6 +228,7 @@ export async function ordering(request, env, db, section, id, action, data) {
   if (!validId(id)) return error('This link is unavailable.', 404);
   if (section === 'menus') {
     const table = await db(`SELECT t.*, v.name AS venue_name FROM dining_tables t JOIN venues v ON v.id = t.venue_id WHERE t.id = ?`, id).first();
+    if (action === 'demo-order' && method === 'POST') return demoCheckout(env, db, id, table, data);
     if (!table && !action && method === 'GET') {
       const venue = await db('SELECT id, name FROM venues WHERE id = ?', id).first();
       if (!venue) return error('Menu unavailable. Ask the restaurant for its QR code.', 404);
@@ -238,6 +280,10 @@ export async function ordering(request, env, db, section, id, action, data) {
     if (action === 'checkout' && method === 'POST') return checkout(request, env, db, table, data);
   }
   if (section === 'orders') {
+    if (action === 'demo' && method === 'GET') {
+      const order = await db(demoOrderQuery + ' WHERE d.id = ?', id).first();
+      return order ? out(demoOrderView(order)) : error('Demo ticket unavailable.', 404);
+    }
     let order = await readOrder(db, id);
     if (!order) return error('Order unavailable.', 404);
     if (!action && method === 'GET') return out(orderView(order));
@@ -256,7 +302,7 @@ export async function ordering(request, env, db, section, id, action, data) {
   const staff = request.headers.get('authorization')?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];
   if (!venue || !staff || await digest(staff) !== venue.staff_hash) return error('Staff access is required.', 401);
   if (!action && method === 'GET') {
-    const [tables, menu, orders] = await Promise.all([
+    const [tables, menu, orders, demoOrders] = await Promise.all([
       db(`SELECT t.id, t.label, (${activeOrder('t.id')} OR EXISTS (
         SELECT 1 FROM table_reservations r WHERE r.table_id = t.id AND r.expires_at > ?
       )) AS occupied FROM dining_tables t WHERE t.venue_id = ? ORDER BY t.label`, Date.now(), id).all(),
@@ -264,8 +310,11 @@ export async function ordering(request, env, db, section, id, action, data) {
       db(`SELECT o.*, t.label AS table_label FROM food_orders o JOIN dining_tables t ON t.id = o.table_id
           WHERE o.venue_id = ? AND o.status <> 'pending' AND (o.status <> 'delivered' OR o.updated_at >= ?)
           ORDER BY o.number DESC LIMIT 200`, id, Date.now() - 86_400_000).all(),
+      db(demoOrderQuery + ` WHERE d.venue_id = ? AND (d.status <> 'delivered' OR d.updated_at >= ?)
+        ORDER BY d.created_at DESC LIMIT 100`, id, Date.now() - 86_400_000).all(),
     ]);
-    return out({ venue: { id, name: venue.name }, payment_available: Boolean(merchant(env, id)), tables: tables.results, items: menu.results, orders: orders.results.map(orderView) });
+    return out({ venue: { id, name: venue.name }, payment_available: Boolean(merchant(env, id)),
+      tables: tables.results, items: menu.results, orders: orders.results.map(orderView), demo_orders: demoOrders.results.map(demoOrderView) });
   }
   if (action === 'table' && method === 'POST') {
     const label = clean(data.label);
@@ -287,14 +336,17 @@ export async function ordering(request, env, db, section, id, action, data) {
                   VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`, uuid(), id, name, description, data.price, Number(data.available), category || 'Other').first();
     return item ? out(item) : error('Menu item unavailable.', 404);
   }
-  if (action === 'order' && method === 'PATCH') {
-    const previous = new Map([['preparing','paid'], ['ready','preparing'], ['delivered','ready']]).get(data.status);
-    if (!previous || !validId(data.id)) return error('Invalid order change.', 400);
-    const updated = await db(`UPDATE food_orders SET status = ?, updated_at = ? WHERE id = ? AND venue_id = ?
-      AND status = ? RETURNING id`, data.status, Date.now(), data.id, id, previous).first();
-    if (updated) return out({ ok: true });
-    const existing = await db('SELECT status FROM food_orders WHERE id = ? AND venue_id = ?', data.id, id).first();
-    return existing?.status === data.status ? out({ ok: true }) : error('The order changed. Refresh the queue.', 409);
+  if ((action === 'order' || action === 'demo-order') && method === 'PATCH') {
+    const demo = action === 'demo-order';
+    const previous = { preparing:demo ? 'placed' : 'paid', ready:'preparing', delivered:'ready' };
+    const status = clean(data.status);
+    if (!Object.hasOwn(previous, status) || !validId(data.id)) return error('Invalid order change.', 400);
+    const table = demo ? 'demo_food_orders' : 'food_orders';
+    const updated = await db(`UPDATE ${table} SET status = ?, updated_at = ? WHERE id = ? AND venue_id = ?
+      AND status = ? RETURNING id`, status, Date.now(), data.id, id, previous[status]).first();
+    if (updated) return out({ ok:true });
+    const existing = await db(`SELECT status FROM ${table} WHERE id = ? AND venue_id = ?`, data.id, id).first();
+    return existing?.status === status ? out({ ok:true }) : error('The order changed. Refresh the queue.', 409);
   }
   return error('Page unavailable.', 404);
 }

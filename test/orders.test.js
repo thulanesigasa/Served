@@ -123,3 +123,51 @@ test('a shared table QR has only one active reservation across guests', async t 
   await DB.prepare('UPDATE table_reservations SET expires_at = ? WHERE table_id = ?').bind(Date.now() - 1, table.id).run();
   assert.equal((await send(reservation, guests[winner])).status, 201);
 });
+
+test('demo checkout reaches only its restaurant kitchen queue and tracks preparation', async t => {
+  const DB = localDb();
+  t.after(() => DB.close());
+  const env = { DB };
+  async function send(path, method = 'GET', body, token) {
+    const response = await api(new Request('https://served.example/api/' + path, {
+      method,
+      headers: { 'Content-Type':'application/json', ...(token ? { Authorization:'Bearer ' + token } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    }), env);
+    return [response.status, await response.json()];
+  }
+
+  const [, a] = await send('venues', 'POST', { name:'Kitchen A' });
+  const [, b] = await send('venues', 'POST', { name:'Kitchen B' });
+  const staff = 'ordering/' + a.venue.id;
+  const [, table] = await send(staff + '/table', 'POST', { label:'Table 3' }, a.staffToken);
+  const id = randomUUID().replaceAll('-', '');
+  const order = { id, quantities:{ burger:2 }, expected_total:17800 };
+  const path = 'menus/' + table.id + '/demo-order';
+  assert.equal((await send(path, 'POST', { ...order, expected_total:1 }))[0], 409);
+  const [status, saved] = await send(path, 'POST', order);
+  assert.equal(status, 201);
+  assert.equal(saved.number, id.slice(0, 5).toUpperCase());
+  assert.equal(saved.table_label, 'Table 3');
+  assert.equal(saved.status, 'placed');
+  assert.equal((await send(path, 'POST', order))[0], 200);
+  const [, queue] = await send(staff, 'GET', undefined, a.staffToken);
+  assert.deepEqual(queue.orders, []);
+  assert.equal(queue.demo_orders.length, 1);
+  assert.deepEqual(queue.demo_orders[0].items, [{ id:'burger', name:'Double Smash Burger', price:8900, quantity:2 }]);
+  const [, otherQueue] = await send('ordering/' + b.venue.id, 'GET', undefined, b.staffToken);
+  assert.deepEqual(otherQueue.demo_orders, []);
+  const change = { id, status:'preparing' };
+  assert.equal((await send(staff + '/demo-order', 'PATCH', change, b.staffToken))[0], 401);
+  assert.equal((await send(staff + '/demo-order', 'PATCH', change, a.staffToken))[0], 200);
+  assert.equal((await send('orders/' + id + '/demo'))[1].status, 'preparing');
+
+  const qrOrder = { ...order, id:randomUUID().replaceAll('-', '') };
+  const [, general] = await send('menus/' + a.venue.id + '/demo-order', 'POST', qrOrder);
+  assert.equal(general.table_label, 'Restaurant QR');
+  const [, item] = await send(staff + '/menu', 'POST', { name:'Chips', price:3500, available:true }, a.staffToken);
+  env.PAYSTACK_VENUES = JSON.stringify({ [a.venue.id]:'sk_live_mockForTests' });
+  assert.equal((await send(path, 'POST', {
+    id:randomUUID().replaceAll('-', ''), quantities:{ [item.id]:1 }, expected_total:3500,
+  }))[0], 409);
+});

@@ -1,6 +1,6 @@
 import QRCode from 'qrcode';
 import { icon } from './icons.js';
-import { demoMenuCode, guestOrdering, staffOrdering } from './ordering.js';
+import { demoMenuCode, guestOrdering, localDemoKitchen, staffOrdering } from './ordering.js';
 
 const app = document.querySelector('#app');
 const dialog = document.querySelector('#dialog');
@@ -154,7 +154,7 @@ function stats() {
 }
 function renderDashboard() {
   const titles = {
-    ordering: ['Restaurant orders', 'Publish your menu, set up table QR codes and manage paid orders.'],
+    ordering: ['Restaurant orders', 'Publish your menu, set up table QR codes and manage orders.'],
     queue: ['Live queue', 'Manage tables and pickups from one place.'],
     qr: ['Menu QR', 'Share a QR code that opens your restaurant menu.'],
     history: ['Ticket history', 'See how recent tickets were closed.'],
@@ -164,7 +164,10 @@ function renderDashboard() {
   const contents = {
     ordering: () => hasStaff ? '<section class="surface" id="staff-ordering"></section>'
       : `<section class="surface setup"><h2>Set up your restaurant</h2><p>Add a menu and create a QR code for each table.</p>${actionButton('setup', 'Set up a restaurant', 'primary')}
-        <a class="btn" href="/?demo-menu=1">Open demo menu</a></section>`,
+        <a class="btn" href="/?demo-menu=1">Open demo menu</a></section>
+        <section class="surface setup"><h2>Demo kitchen queue</h2>
+        <p>Orders placed in this browser appear here. Set up a restaurant to share orders across devices.</p>
+        <div id="local-demo-kitchen">${localDemoKitchen(read('served.demoOrders') || [])}</div></section>`,
     queue: () => stats() + queuePanel(false), qr: qrPanel, history: () => queuePanel(true),
     install: () => `<section class="surface setup"><h2>Add Served to your home screen</h2>
     <p><strong>Android:</strong> Open Served in Chrome and choose Install app or Add to Home screen from the menu.</p>
@@ -561,7 +564,13 @@ window.addEventListener('beforeinstallprompt', event => {
   event.preventDefault();
   installPrompt = event;
 });
-window.addEventListener('storage', event => { if (event.key === 'served.demo') refresh(); });
+window.addEventListener('storage', event => {
+  if (event.key === 'served.demo') refresh();
+  if (event.key === 'served.demoOrders') {
+    const queue = document.querySelector('#local-demo-kitchen');
+    if (queue) queue.innerHTML = localDemoKitchen(read('served.demoOrders') || []);
+  }
+});
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     if (keepAwake && ticket?.status === 'waiting') requestWake().catch(() => {});

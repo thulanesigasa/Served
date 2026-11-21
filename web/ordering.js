@@ -8,6 +8,7 @@ export const demoMenuCode = 'c98f5fc36be3439eba270a18abbbf2ac';
 const demoWaitMinutes = 12;
 const statuses = {
   pending: ['Awaiting payment', 'Your order will go to the kitchen once payment is confirmed.'],
+  placed: ['Order placed', 'Sent to the demo kitchen.'],
   paid: ['Order placed', 'The kitchen has received your order.'],
   preparing: ['Preparing', 'The kitchen is preparing your order.'],
   ready: ['Ready', 'Your waiter will serve you shortly.'],
@@ -50,6 +51,30 @@ function smallOrder(order) {
     <p>${esc(order.table_label)} · ${displayDate(order.created_at)}</p></div>
     <div><span>${statuses[order.status][0]}</span><br><strong>${money(order.total)}</strong></div>
     ${button('open-order', 'View', '', order.id)}</div>`;
+}
+
+function kitchenTickets(orders, actions = false) {
+  const transitions = {
+    placed:['preparing','Start preparing'], paid:['preparing','Start preparing'],
+    preparing:['ready','Ready for waiter'], ready:['delivered','Mark delivered'],
+  };
+  return orders.map(order => {
+    const action = transitions[order.status];
+    const type = order.demo ? 'demo' : 'real';
+    return `<article class="kitchen-ticket">
+      <div class="kitchen-heading"><h3>${esc(orderNumber(order.number))} · ${esc(order.table_label || 'Restaurant QR')}</h3>
+        <span>${statuses[order.status][0]}</span></div>
+      <p>${order.demo ? 'Demo order · No charge' : esc(order.guest_name)} · ${money(order.total)}</p>
+      ${listItems(order.items)}
+      ${actions && action ? button('staff-stage', action[1], 'primary', [type, order.id, action[0]].join(':')) : ''}
+    </article>`;
+  }).join('');
+}
+
+export function localDemoKitchen(orders) {
+  const local = orders.filter(order => !order.shared && [demoMenuCode, 'demo'].includes(order.menu_id))
+    .map(order => ({ ...order, demo:true, status:'placed' }));
+  return kitchenTickets(local) || '<p class="order-empty">No demo orders from this browser yet.</p>';
 }
 
 export function guestOrdering(app, params) {
@@ -248,18 +273,19 @@ export function guestOrdering(app, params) {
     if (paymentConfirmed) return `<section class="demo-checkout checkout-confirmation">
       <span class="checkout-check">${icon('check', 30)}</span>
       <h1>Order complete</h1>
-      <p role="status">Demo payment confirmed. No charge was made.</p>
+      <p role="status">Demo payment confirmed. No charge was made.${placed.shared ? ' Sent to the demo kitchen.' : ''}</p>
       <p class="checkout-confirmed-number">Ticket ${number}</p>
       ${button('demo-view-ticket', 'Back to menu', 'checkout-primary')}
       <p class="checkout-note">Your ticket and estimated wait are next.</p>
     </section>`;
     const orderedAt = new Date(placed.created_at).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
     return `<section class="surface guest-card is-waiting demo-wait-ticket">
-      <div class="ticket-topline"><strong>${esc(placed.venue_name)}</strong><span class="eyebrow">Demo queue</span></div>
+      <div class="ticket-topline"><strong>${esc(placed.venue_name)}</strong><span class="eyebrow">${placed.shared ? statuses[placed.status][0] : 'Demo queue'}</span></div>
       <div class="ticket-main">
         <h1 class="demo-ticket-number" tabindex="-1">Ticket ${number}</h1>
-        <p class="wait-estimate">Estimated wait · about ${esc(placed.estimated_wait_minutes ?? demoWaitMinutes)} min</p>
-        <p>Demo wait from the time you placed your order.</p>
+        ${['ready','delivered'].includes(placed.status) ? '<p role="status">' + statuses[placed.status][0] + ' · Demo order</p>' :
+          `<p class="wait-estimate">Estimated wait · about ${esc(placed.estimated_wait_minutes ?? demoWaitMinutes)} min</p>
+           <p>Demo wait from the time you placed your order.</p>`}
       </div>
       <div class="ticket-stub">
         <div class="stub-number"><span class="eyebrow">Ticket</span><strong>${number}</strong></div>
@@ -396,8 +422,27 @@ export function guestOrdering(app, params) {
     render();
   }
 
+  async function syncDemoTicket() {
+    const id = placed.id;
+    try {
+      const next = await api('orders/' + id + '/demo');
+      if (placed?.id !== id || placed.status === next.status) return;
+      placed = { ...placed, status:next.status };
+      const receipts = saved('demoOrders');
+      store('demoOrders', receipts.map(receipt => receipt.id === id ? placed : receipt));
+      if (screen === 'feed') render();
+    } catch { /* Keep the last known ticket status while offline. */ }
+  }
+
   async function sync() {
-    if (!order || screen !== 'feed' || document.hidden || syncBusy || loading || order.status === 'delivered') return;
+    if (screen !== 'feed' || document.hidden || syncBusy || loading) return;
+    if (placed?.shared && placed.status !== 'delivered' && !paymentConfirmed) {
+      syncBusy = true;
+      try { await syncDemoTicket(); }
+      finally { syncBusy = false; }
+      return;
+    }
+    if (!order || order.status === 'delivered') return;
     syncBusy = true;
     const id = order.id;
     const verify = refreshTicket && order.status === 'pending';
@@ -504,18 +549,28 @@ export function guestOrdering(app, params) {
         window.scrollTo(0, 0);
         revealCheckout();
       } else if (action === 'demo-place' && demoMode() && demoPayment && count()) {
-        const id = crypto.randomUUID();
-        const receipt = {
-          id,
-          number:id.slice(0, 5).toUpperCase(),
-          menu_id:tableId || demoMenuCode,
-          venue_name:table?.venue_name || 'Served Kitchen',
-          created_at:Date.now(),
-          estimated_wait_minutes:demoWaitMinutes,
-          table_label:table?.label,
-          items:selection().filter(item => quantities[item.id]).map(item => ({ ...item, quantity:quantities[item.id] })),
-          total:total(),
-        };
+        checkoutId ||= crypto.randomUUID().replaceAll('-', '');
+        const id = checkoutId;
+        let receipt;
+        if (table) {
+          loading = control.disabled = true;
+          try {
+            const placedOrder = await api('menus/' + table.id + '/demo-order', undefined, 'POST', {
+              id, quantities, expected_total:total(),
+            });
+            receipt = { ...placedOrder, shared:true, menu_id:tableId, estimated_wait_minutes:demoWaitMinutes };
+          } finally {
+            loading = control.disabled = false;
+          }
+        } else {
+          receipt = {
+            id, number:id.slice(0, 5).toUpperCase(), menu_id:tableId || demoMenuCode,
+            venue_name:'Served Kitchen', created_at:Date.now(), estimated_wait_minutes:demoWaitMinutes,
+            items:selection().filter(item => quantities[item.id]).map(item => ({ ...item, quantity:quantities[item.id] })),
+            total:total(),
+          };
+        }
+        checkoutId = null;
         quantities = {};
         try {
           store('demoOrders', [receipt, ...saved('demoOrders')]);
@@ -646,15 +701,11 @@ export function staffOrdering(app, venueConfig, { notice, modal }) {
   );
 
   function queue() {
-    if (!state.orders.length) return '<p class="order-empty">Verified orders will appear here.</p>';
-    const transitions = { paid:['preparing','Start preparing'], preparing:['ready','Ready for waiter'], ready:['delivered','Mark delivered'] };
-    return state.orders.map(order => {
-      const action = transitions[order.status];
-      return `<article class="kitchen-ticket">
-        <div class="kitchen-heading"><h3>${orderNumber(order.number)} · ${esc(order.table_label)}</h3><span>${statuses[order.status][0]}</span></div>
-        <p>${esc(order.guest_name)} · ${money(order.total)}</p>${listItems(order.items)}
-        ${action ? button('staff-stage', action[1], 'primary', order.id + ':' + action[0]) : ''}</article>`;
-    }).join('');
+    if (!state.orders.length && !state.demo_orders?.length) {
+      return '<p class="order-empty">Orders placed through this restaurant’s Menu QR or Table QR will appear here.</p>';
+    }
+    return kitchenTickets(state.orders, true) + (state.demo_orders?.length ?
+      `<section><h2>Demo orders</h2>${kitchenTickets(state.demo_orders, true)}</section>` : '');
   }
 
   function menu() {
@@ -765,8 +816,8 @@ export function staffOrdering(app, venueConfig, { notice, modal }) {
       if (action === 'staff-qr') await showQr(state.tables.find(table => table.id === value));
       if (action === 'staff-retry') await refresh();
       if (action === 'staff-stage') {
-        const [id, status] = value.split(':');
-        await call('/order', 'PATCH', { id, status });
+        const [type, id, status] = value.split(':');
+        await call(type === 'demo' ? '/demo-order' : '/order', 'PATCH', { id, status });
         state = await call();
         render();
       }
