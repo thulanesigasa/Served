@@ -105,6 +105,54 @@ export function guestOrdering(app, params) {
   const total = () => selection().reduce((sum, item) => sum + item.price * (quantities[item.id] || 0), 0);
   const count = () => Object.values(quantities).reduce((sum, value) => sum + value, 0);
 
+  const allowsMotion = () => Boolean(window.matchMedia && !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  function revealCheckout() {
+    if (!allowsMotion()) return;
+    const panel = app.querySelector('.demo-checkout, .demo-wait-ticket, .order-ticket, .demo-menu');
+    panel?.animate?.([
+      { opacity:.55, transform:'translateY(12px)' },
+      { opacity:1, transform:'translateY(0)' },
+    ], { duration:320, easing:'cubic-bezier(.2,.75,.25,1)' });
+    app.querySelector('.checkout-check svg')?.animate?.([
+      { opacity:.4, transform:'scale(.6)' },
+      { opacity:1, transform:'scale(1.14)', offset:.68 },
+      { opacity:1, transform:'scale(1)' },
+    ], { duration:400, easing:'ease-out' });
+  }
+
+  function showCartAddition(source) {
+    const cart = app.querySelector('.demo-cart-launch .btn');
+    if (!cart) {
+      app.querySelector('.checkout-total dd, #order-checkout .order-total strong:last-child')?.animate?.(
+        [{ opacity:.55 }, { opacity:1 }], { duration:280, easing:'ease-out' });
+      return;
+    }
+    cart.animate?.([
+      { transform:'scale(1)' },
+      { transform:'scale(1.055)', offset:.52 },
+      { transform:'scale(1)' },
+    ], { duration:280, delay:source ? 200 : 0, easing:'ease-out' });
+    if (!source || !cart.animate) return;
+
+    const target = cart.getBoundingClientRect();
+    const startX = source.left + source.width / 2;
+    const startY = source.top + source.height / 2;
+    const dx = target.left + target.width / 2 - startX;
+    const dy = target.top + target.height / 2 - startY;
+    const marker = document.createElement('span');
+    marker.className = 'cart-add-motion';
+    marker.setAttribute('aria-hidden', 'true');
+    marker.innerHTML = icon('plus', 19);
+    app.append(marker);
+    const flight = marker.animate([
+      { transform:`translate(${startX - 10}px,${startY - 10}px) scale(.85)`, opacity:.9 },
+      { transform:`translate(${startX - 10 + dx * .45}px,${startY - 10 + dy * .35 - 32}px) scale(1.1)`, opacity:1, offset:.45 },
+      { transform:`translate(${startX - 10 + dx}px,${startY - 10 + dy}px) scale(.45)`, opacity:0 },
+    ], { duration:420, easing:'ease-in-out' });
+    flight.finished.then(() => marker.remove(), () => marker.remove());
+  }
+
   function ring() {
     if (!sound) return;
     navigator.vibrate?.([180, 100, 180]);
@@ -184,6 +232,7 @@ export function guestOrdering(app, params) {
     if (updateLink) setDemoTicketLink(receipt.id);
     render();
     window.scrollTo(0, 0);
+    if (updateLink) revealCheckout();
   }
 
   function setDemoTicketLink(id) {
@@ -448,10 +497,12 @@ export function guestOrdering(app, params) {
         demoPayment = false;
         render();
         window.scrollTo(0, 0);
+        revealCheckout();
       } else if (action === 'demo-payment' && cartOpen && count()) {
         demoPayment = !demoPayment;
         render();
         window.scrollTo(0, 0);
+        revealCheckout();
       } else if (action === 'demo-place' && demoMode() && demoPayment && count()) {
         const id = crypto.randomUUID();
         const receipt = {
@@ -477,6 +528,7 @@ export function guestOrdering(app, params) {
         render();
         app.querySelector('.demo-ticket-number')?.focus({ preventScroll:true });
         window.scrollTo(0, 0);
+        revealCheckout();
       } else if (action === 'open-demo-ticket') {
         const receipt = saved('demoOrders').find(entry => entry.id === value);
         if (receipt) showDemoTicket(receipt);
@@ -490,12 +542,16 @@ export function guestOrdering(app, params) {
         const form = app.querySelector('#order-checkout');
         if (form?.elements.name) savedName = form.elements.name.value;
         if (form?.elements.email) savedEmail = form.elements.email.value;
-        const amount = Math.min(20, Math.max(0, (quantities[value] || 0) + (action === 'plus' ? 1 : -1)));
+        const previous = quantities[value] || 0;
+        const amount = Math.min(20, Math.max(0, previous + (action === 'plus' ? 1 : -1)));
+        const added = amount > previous && allowsMotion();
+        const source = added && demoMode() && !cartOpen ? control.getBoundingClientRect() : null;
         if (amount) quantities[value] = amount;
         else delete quantities[value];
         if (cartOpen && !count()) cartOpen = demoPayment = false;
         checkoutId = null;
         render(control.dataset);
+        if (added) showCartAddition(source);
       } else if (action === 'open-order') await showOrder(value);
       else if (action === 'verify') await showOrder(order.id, true);
       else if (action === 'enable-sound') {

@@ -825,3 +825,16 @@ dialog::backdrop { background: #1a101dc4; }
   .demo-wait-ticket { border-inline: 0; border-radius: 0; box-shadow: none; }
   .demo-wait-ticket .ticket-stub::before, .demo-wait-ticket .ticket-stub::after { display: none; }
 }
+
+.cart-add-motion {
+  position: fixed;
+  z-index: 5;
+  inset: 0 auto auto 0;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: #fff1eb;
+  filter: drop-shadow(0 1px 4px #32162c);
+  pointer-events: none;
+}
