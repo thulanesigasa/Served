@@ -667,7 +667,12 @@ dialog::backdrop { background: #1a101dc4; }
 .demo-app .btn.demo-secondary { color: #fff1e9; background: transparent; margin-top: 7px; }
 .demo-app .table-hold .btn { color: #fff1e9; border-color: #b9889d; }
 .demo-app .table-hold .btn.primary { background: #f4bfc4; color: #291a28; }
-.demo-receipt .demo-ticket-number { color: #f4bfc4; border-block: 1px dashed #b9889d; padding: 12px 0; }
+.demo-receipt .demo-ticket-number {
+  color: #f4bfc4;
+  border-block: 1px dashed #b9889d;
+  margin-block: 12px;
+  padding: 12px 0;
+}
 .demo-receipt .food-list li, .demo-cart .food-list li { border-color: #937086; }
 
 .demo-cart-launch {
@@ -743,7 +748,7 @@ dialog::backdrop { background: #1a101dc4; }
   .order-app.demo-app { background: #211621; }
   .order-app:has(.order-paper) { background: var(--paper); }
   .order-app:not(.demo-app) .order-header { background: #251929; }
-  .order-app :is(.order-paper, .demo-menu, .demo-receipt, .demo-dish, .demo-featured, .order-tabs, .btn, input) {
+  .order-app :is(.order-paper, .demo-menu, .demo-receipt, .demo-dish, .demo-featured, .btn, input) {
     border-radius: 0;
   }
   .order-app .demo-categories {

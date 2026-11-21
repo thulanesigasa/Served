@@ -1,20 +1,11 @@
 import { menuCategories } from './menu-catalog.js';
 
-export function demoMenu({ items, reservation, title, category, payment, quantities, count, total, cartOpen, placed, button, esc, money, listItems }) {
+export function demoMenu({ items, reservation, title, category, payment, quantities, count, total, cartOpen, button, esc, money, listItems }) {
   const featured = items.find(item => item.id === 'chicken');
   const visible = category === 'All' ? items : items.filter(item => item.category === category);
   const lines = items.filter(item => quantities[item.id]).map(item => ({ ...item, quantity:quantities[item.id] }));
   const quantity = item => `<div class="demo-quantity">${quantities[item.id] ? button('minus', '<span aria-hidden="true">−</span><span class="order-sr">Remove ' + esc(item.name) + '</span>', '', item.id) + '<span>' + quantities[item.id] + '</span>' : ''}
     ${button('plus', '<span aria-hidden="true">+</span><span class="order-sr">Add ' + esc(item.name) + '</span>', '', item.id)}</div>`;
-  if (placed) return `<section class="demo-receipt">
-    <p class="demo-kicker">Demo ticket</p><h1>Order complete</h1>
-    <p role="status">No charge was made. This order was for practice.</p>
-    <p class="demo-ticket-number">Ticket #${esc(placed.number)}</p>
-    ${listItems(placed.items)}
-    <p class="order-total"><strong>Demo total</strong><strong>${money(placed.total)}</strong></p>
-    ${button('demo-return', 'Back to menu', 'demo-cta')}
-  </section>`;
-
   if (cartOpen && count) return `<section class="demo-receipt" id="demo-cart">
     <p class="demo-kicker">Demo checkout</p>
     <h1>${payment ? 'Demo payment' : 'Review your order'}</h1>

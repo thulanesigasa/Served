@@ -91,7 +91,10 @@ export function guestOrdering(app, params) {
   const reservationCall = (id, data) => api('menus/' + id + '/reservation', token(), 'POST', { holder:holder(), ...data });
   const sessionKey = key => 'served.' + key + (native ? '.' + (session?.guest.id || 'native') : '');
   const saved = key => {
-    try { return JSON.parse(localStorage.getItem(sessionKey(key)) || '[]'); }
+    try {
+      const values = JSON.parse(localStorage.getItem(sessionKey(key)));
+      return Array.isArray(values) ? values : [];
+    }
     catch { return []; }
   };
   const store = (key, values) => localStorage.setItem(sessionKey(key), JSON.stringify(values.slice(0, 100)));
@@ -169,6 +172,50 @@ export function guestOrdering(app, params) {
       </section>`;
   }
 
+  function showDemoTicket(receipt, updateLink = true) {
+    ++menuRequest;
+    placed = receipt;
+    order = orderId = null;
+    screen = 'feed';
+    cartOpen = demoPayment = false;
+    if (updateLink) setDemoTicketLink(receipt.id);
+    render();
+    window.scrollTo(0, 0);
+  }
+
+  function setDemoTicketLink(id) {
+    const current = new URL(location.href);
+    if (id) current.searchParams.set('demo-ticket', id);
+    else if (!current.searchParams.has('demo-ticket')) return;
+    else current.searchParams.delete('demo-ticket');
+    history.replaceState(null, '', current);
+  }
+
+  function demoTicket() {
+    return `<section class="demo-receipt">
+      <p class="demo-kicker">Demo ticket</p>
+      <h1 class="demo-ticket-number" tabindex="-1">Ticket ${esc(orderNumber(placed.number))}</h1>
+      <p role="status">Order complete. No charge was made.</p>
+      <p>${esc(placed.venue_name)}</p>
+      ${listItems(placed.items)}
+      <p class="order-total"><strong>Demo total</strong><strong>${money(placed.total)}</strong></p>
+      ${button('demo-return', 'Back to menu', 'demo-cta')}
+    </section>`;
+  }
+
+  function orderHistory() {
+    const receipts = saved('demoOrders');
+    return `<section class="order-paper"><h1>Order history</h1>
+      ${historyList.map(smallOrder).join('')}
+      ${receipts.length ? `<h2>Demo tickets</h2>${receipts.map(receipt => `<div class="order-line">
+        <div><strong>Ticket ${esc(orderNumber(receipt.number))}</strong>
+          <p>${esc(receipt.venue_name)} · ${displayDate(receipt.created_at)}</p></div>
+        ${button('open-demo-ticket', 'View', '', receipt.id)}
+      </div>`).join('')}` : ''}
+      ${!historyList.length && !receipts.length ? '<p>Your orders will appear here.</p>' : ''}
+    </section>`;
+  }
+
   function ticket() {
     if (order.status === 'pending') return `<section class="order-paper">
       <p class="eyebrow">${esc(order.venue_name)} · ${esc(order.table_label)}</p>
@@ -182,7 +229,7 @@ export function guestOrdering(app, params) {
     return `<section class="order-paper order-ticket ${order.status === 'ready' ? 'order-ready' : ''}">
       <p class="eyebrow">${esc(order.venue_name)} · ${esc(order.table_label)}</p>
       <h1>${label}</h1><p role="status">${message}</p>
-      <div class="order-ticket-stub"><span>Order ${orderNumber(order.number)}</span><strong>${esc(order.guest_name)}</strong></div>
+      <div class="order-ticket-stub"><span>Ticket ${orderNumber(order.number)}</span><strong>${esc(order.guest_name)}</strong></div>
       ${listItems(order.items)}
       <p class="order-total"><strong>Total</strong><strong>${money(order.total)}</strong></p>
       <div class="order-buttons">
@@ -201,6 +248,7 @@ export function guestOrdering(app, params) {
       <button class="btn ${native ? '' : 'primary'}">Open menu</button></form>
       ${button('demo-menu', 'Try the demo menu')}
       ${saved('foodOrders').length ? button('open-order', 'Resume last order', '', saved('foodOrders')[0]) : ''}
+      ${saved('demoOrders').length ? button('open-demo-ticket', 'View last demo ticket', '', saved('demoOrders')[0].id) : ''}
     </section>`;
   }
 
@@ -209,19 +257,19 @@ export function guestOrdering(app, params) {
     const shops = [...localShops, ...accountShops.filter(shop => !localShops.some(local => local.id === shop.id))]
       .sort((a, b) => b.date - a.date);
     const content = !sessionLoaded ? '<section class="order-paper"><h1>Opening your feed</h1></section>'
-      : screen === 'history' ? `<section class="order-paper"><h1>Order history</h1>${historyList.length ? historyList.map(smallOrder).join('') : '<p>Your orders will appear here.</p>'}</section>`
+      : screen === 'history' ? orderHistory()
       : screen === 'shops' ? `<section class="order-paper"><h1>Visited shops</h1>${shops.length ? shops.map(shop => `<div class="order-line"><div><strong>${esc(shop.name)}</strong><p>Last visit ${displayDate(shop.date)}</p></div></div>`).join('') : '<p>Restaurants you visit will appear here.</p>'}
         <p>Scan a table QR when you visit again.</p></section>`
       : screen === 'settings' ? `<section class="order-paper"><h1>Settings</h1>
         ${session ? `<h2>Account</h2><p>${esc(session.guest.name)}<br>${esc(session.guest.email)}</p>` : ''}
         <h2>Order alerts</h2><label class="settings-check"><input type="checkbox" id="order-sound" ${sound ? 'checked' : ''}> Play an alert when the waiter is on the way</label>
         ${native ? button('signout', 'Sign out') : ''}</section>`
-      : order ? ticket() : demoMode() ? demoMenu({
+      : placed ? demoTicket() : order ? ticket() : demoMode() ? demoMenu({
         items:selection(), reservation:reservationCard(), title:table?.venue_name || 'Served Kitchen',
         category, payment:demoPayment, quantities,
-        count:count(), total:total(), cartOpen, placed, button, esc, money, listItems,
+        count:count(), total:total(), cartOpen, button, esc, money, listItems,
       }) : table ? menuCard() : landing();
-    app.innerHTML = `<main class="guest order-app${screen === 'feed' && !order && demoMode() ? ' demo-app' : ''}">
+    app.innerHTML = `<main class="guest order-app${screen === 'feed' && !order && (placed || demoMode()) ? ' demo-app' : ''}">
       <header class="order-header"><a href="${url({ shell:'guest', ...(native ? { native:'1' } : {}) })}" aria-label="Served home"><img src="/served-logo.png" alt="Served" width="88" height="36"></a></header>
       <div class="order-content">${issue ? `<p class="order-error" role="status">${esc(issue)}</p>` : ''}${content}</div>
       <nav class="order-tabs" aria-label="Guest navigation">${tabs.map(([key, glyph, title]) =>
@@ -232,6 +280,7 @@ export function guestOrdering(app, params) {
   }
 
   function resetMenu(id = null) {
+    setDemoTicketLink(null);
     table = order = orderId = checkoutId = placed = null;
     tableId = id;
     quantities = {};
@@ -268,6 +317,8 @@ export function guestOrdering(app, params) {
   async function showOrder(id, verify = false) {
     const candidate = await api(`orders/${id}${verify ? '/verify' : ''}`, token(), verify ? 'POST' : 'GET', verify ? {} : undefined);
     ++menuRequest;
+    setDemoTicketLink(null);
+    placed = null;
     order = candidate;
     orderId = candidate.id;
     rememberOrder(candidate);
@@ -304,7 +355,10 @@ export function guestOrdering(app, params) {
     if (!sessionLoaded) return render();
     try {
       issue = '';
-      if (validId(orderId)) await showOrder(orderId, params.get('payment') === 'return');
+      const receiptId = params.get('demo-ticket');
+      const receipt = receiptId && saved('demoOrders').find(entry => entry.id === receiptId);
+      if (receipt) showDemoTicket(receipt, false);
+      else if (validId(orderId)) await showOrder(orderId, params.get('payment') === 'return');
       else if (tableId) await fetchMenu(tableId);
       else if (demoOnly) render();
       else {
@@ -329,8 +383,11 @@ export function guestOrdering(app, params) {
       if (action === 'tab') {
         screen = value;
         if (value === 'history') {
-          historyList = native ? await api('orders', token()) : (await Promise.allSettled(saved('foodOrders').slice(0,20).map(id => api('orders/' + id))))
+          render(control.dataset);
+          const results = native ? await api('orders', token()) : (await Promise.allSettled(saved('foodOrders').slice(0,20).map(id => api('orders/' + id))))
             .filter(entry => entry.status === 'fulfilled').map(entry => entry.value);
+          historyList = results;
+          if (screen !== 'history') return;
         }
         if (value === 'shops' && native) accountShops = await api('orders/shops', token());
         render(control.dataset);
@@ -374,18 +431,33 @@ export function guestOrdering(app, params) {
         demoPayment = !demoPayment;
         render();
       } else if (action === 'demo-place' && demoMode() && demoPayment && count()) {
-        placed = {
-          number:crypto.randomUUID().slice(0, 5).toUpperCase(),
+        const id = crypto.randomUUID();
+        const receipt = {
+          id,
+          number:id.slice(0, 5).toUpperCase(),
+          menu_id:tableId || demoMenuCode,
+          venue_name:table?.venue_name || 'Served Kitchen',
+          created_at:Date.now(),
           items:selection().filter(item => quantities[item.id]).map(item => ({ ...item, quantity:quantities[item.id] })),
           total:total(),
         };
         quantities = {};
-        cartOpen = demoPayment = false;
-        render();
-        window.scrollTo(0, 0);
+        try {
+          store('demoOrders', [receipt, ...saved('demoOrders')]);
+        } catch {
+          issue = 'This device couldn’t save your ticket to History.';
+        }
+        showDemoTicket(receipt);
+        app.querySelector('.demo-ticket-number')?.focus({ preventScroll:true });
+      } else if (action === 'open-demo-ticket') {
+        const receipt = saved('demoOrders').find(entry => entry.id === value);
+        if (receipt) showDemoTicket(receipt);
       } else if (action === 'demo-return') {
+        const menu = placed.menu_id;
         placed = null;
-        render();
+        setDemoTicketLink(null);
+        if ((table && tableId === menu) || (demoOnly && menu === demoMenuCode)) render();
+        else await fetchMenu(menu);
       } else if (action === 'plus' || action === 'minus') {
         const form = app.querySelector('#order-checkout');
         if (form?.elements.name) savedName = form.elements.name.value;
